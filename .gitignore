@@ -10,14 +10,8 @@ venv/
 .mypy_cache/
 .ruff_cache/
 outputs/logs/*
-!outputs/logs/.gitkeep
 outputs/embeddings/*
-!outputs/embeddings/.gitkeep
 outputs/thumbnails/*
-!outputs/thumbnails/.gitkeep
 outputs/frames/*
-!outputs/frames/.gitkeep
 outputs/metadata/*
-!outputs/metadata/.gitkeep
 data/samples/*
-!data/samples/.gitkeep
