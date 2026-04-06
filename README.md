@@ -12,3 +12,5 @@ Project scaffold for multimodal memory (app, scripts, config, data, outputs).
 - `outputs/` — generated logs, embeddings, thumbnails, frames, metadata
 
 Edit `.env` for local secrets (listed in `.gitignore` so it is not committed).
+
+Pipeline overview, Gemini video limits, and server (NAS) workflow: [docs/PIPELINE.md](docs/PIPELINE.md).

@@ -13,5 +13,6 @@ outputs/logs/*
 outputs/embeddings/*
 outputs/thumbnails/*
 outputs/frames/*
+outputs/clips/*
 outputs/metadata/*
 data/samples/*
