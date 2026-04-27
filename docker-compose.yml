@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: mm
+      POSTGRES_PASSWORD: mm
+      POSTGRES_DB: multimodal_memory
+    ports:
+      - "5432:5432"
+    volumes:
+      - mm_pgdata:/var/lib/postgresql/data
+
+volumes:
+  mm_pgdata:

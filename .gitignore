@@ -15,4 +15,7 @@ outputs/thumbnails/*
 outputs/frames/*
 outputs/clips/*
 outputs/metadata/*
+outputs/jobs/*
 data/samples/*
+frontend/node_modules/
+frontend/dist/

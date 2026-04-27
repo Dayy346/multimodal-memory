@@ -16,6 +16,7 @@ MANIFESTS_DIR = DATA_DIR / "manifests"
 SAMPLES_DIR = DATA_DIR / "samples"
 
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+JOBS_DIR = OUTPUTS_DIR / "jobs"
 THUMBNAILS_DIR = OUTPUTS_DIR / "thumbnails"
 FRAMES_DIR = OUTPUTS_DIR / "frames"
 CLIPS_DIR = OUTPUTS_DIR / "clips"
@@ -60,6 +61,7 @@ EMBEDDING_OUTPUT_DIMENSIONALITY: int | None = (
 def ensure_output_dirs() -> None:
     for d in (
         MANIFESTS_DIR,
+        JOBS_DIR,
         THUMBNAILS_DIR,
         FRAMES_DIR,
         CLIPS_DIR,

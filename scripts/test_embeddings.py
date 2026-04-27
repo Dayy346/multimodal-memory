@@ -15,9 +15,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from google import genai  # noqa: E402
-from google.genai import types  # noqa: E402
-
 from config.settings import (  # noqa: E402
     EMBEDDING_OUTPUT_DIMENSIONALITY,
     EMBED_MANIFEST_NAME,
@@ -26,62 +23,14 @@ from config.settings import (  # noqa: E402
     METADATA_DIR,
     ensure_output_dirs,
 )
+from multimodal_memory.embed import embed_bytes, embed_text, get_client  # noqa: E402
+from multimodal_memory.preprocess import read_embed_manifest_jsonl  # noqa: E402
 
 
 def _load_dotenv() -> None:
     from dotenv import load_dotenv
 
     load_dotenv(PROJECT_ROOT / ".env")
-
-
-def _embed_config(
-    *,
-    task_type: str | None,
-    output_dimensionality: int | None,
-) -> types.EmbedContentConfig | None:
-    if task_type is None and output_dimensionality is None:
-        return None
-    return types.EmbedContentConfig(
-        task_type=task_type,
-        output_dimensionality=output_dimensionality,
-    )
-
-
-def _embed_text(
-    client: genai.Client,
-    model: str,
-    text: str,
-    task_type: str | None,
-    dims: int | None,
-) -> list[float]:
-    cfg = _embed_config(task_type=task_type, output_dimensionality=dims)
-    response = client.models.embed_content(
-        model=model,
-        contents=text,
-        config=cfg,
-    )
-    return list(response.embeddings[0].values)
-
-
-def _embed_bytes(
-    client: genai.Client,
-    model: str,
-    data: bytes,
-    mime: str,
-    task_type: str | None,
-    dims: int | None,
-) -> list[float]:
-    cfg = _embed_config(task_type=task_type, output_dimensionality=dims)
-    response = client.models.embed_content(
-        model=model,
-        contents=[
-            types.Content(
-                parts=[types.Part.from_bytes(data=data, mime_type=mime)],
-            )
-        ],
-        config=cfg,
-    )
-    return list(response.embeddings[0].values)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -100,17 +49,6 @@ def _collect_media_paths(globs: list[str]) -> list[Path]:
         paths.extend(PROJECT_ROOT.glob(pattern))
     out = sorted({p.resolve() for p in paths if p.is_file()})
     return out
-
-
-def _load_embed_manifest(path: Path) -> list[dict]:
-    rows: list[dict] = []
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    return rows
 
 
 def _format_segment(row: dict) -> str:
@@ -184,12 +122,8 @@ def main() -> None:
     args = parser.parse_args()
 
     dims = args.dims if args.dims else None
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("Set GEMINI_API_KEY or GOOGLE_API_KEY in .env")
-        sys.exit(1)
+    client = get_client()
 
-    client = genai.Client(api_key=api_key)
     catalog: list[dict] = []
 
     if args.legacy_glob:
@@ -222,7 +156,7 @@ def main() -> None:
                 "or pass --legacy-glob."
             )
             sys.exit(1)
-        catalog = _load_embed_manifest(mpath)
+        catalog = read_embed_manifest_jsonl(mpath)
 
     items: list[tuple[dict, list[float]]] = []
     for row in catalog:
@@ -237,13 +171,13 @@ def main() -> None:
         size_mb = len(data) / (1024 * 1024)
         if size_mb > 80:
             print(f"warning: large payload {size_mb:.1f} MB — {p.name}")
-        vec = _embed_bytes(
+        vec = embed_bytes(
             client,
             args.model,
             data,
             mime,
             task_type=args.media_task,
-            dims=dims,
+            output_dimensionality=dims,
         )
         items.append((row, vec))
 
@@ -264,12 +198,12 @@ def main() -> None:
 
     results: dict = {"model": args.model, "queries": []}
     for q in queries:
-        qv = _embed_text(
+        qv = embed_text(
             client,
             args.model,
             q,
             task_type=args.query_task,
-            dims=dims,
+            output_dimensionality=dims,
         )
         scored = [(row, _cosine(qv, vec)) for row, vec in items]
         scored.sort(key=lambda x: x[1], reverse=True)
