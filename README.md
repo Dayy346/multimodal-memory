@@ -18,7 +18,7 @@ Edit `.env` for local secrets (listed in `.gitignore` so it is not committed).
 
 ### Full stack (Docker — recommended on homelab)
 
-1. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`, `ALLOWED_SCAN_ROOTS`, and `NAS_MOUNT` (host path to your NAS, mounted at `/mnt/nas` in the API container).
+1. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. Set `NAS_MOUNT` to your host photo root (e.g. `/mnt/photos`) and `ALLOWED_SCAN_ROOTS` to folders under that same path inside the container (e.g. `/mnt/photos/photos`).
 2. `make up` — builds and starts **Postgres**, **FastAPI**, and **web UI** (nginx). Migrations run automatically on API start.
 3. Open **http://\<server-ip\>:5173** (or `WEB_PORT` from `.env`). All `/api` calls go through the same origin — no second terminal.
 

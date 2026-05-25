@@ -14,6 +14,10 @@ from PIL import Image
 
 from config.settings import (
     CLIPS_DIR as DEFAULT_CLIPS_DIR,
+    FFMPEG_CLIP_TRY_COPY,
+    FFMPEG_FRAME_TIMEOUT_SEC,
+    FFMPEG_SEGMENT_TIMEOUT_SEC,
+    FFPROBE_TIMEOUT_SEC,
     FRAMES_DIR as DEFAULT_FRAMES_DIR,
     THUMBNAILS_DIR as DEFAULT_THUMBNAILS_DIR,
     VIDEO_EMBED_MAX_SECONDS,
@@ -85,11 +89,23 @@ def write_thumbnail(src: Path, dest: Path, max_side: int) -> bool:
     return dest.is_file()
 
 
+def _run_subprocess(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _unlink_if_exists(path: Path) -> None:
+    if path.is_file():
+        path.unlink(missing_ok=True)
+
+
 def ffprobe_duration(video: Path) -> float | None:
     exe = shutil.which("ffprobe")
     if not exe:
         return None
-    r = subprocess.run(
+    r = _run_subprocess(
         [
             exe,
             "-v",
@@ -100,14 +116,12 @@ def ffprobe_duration(video: Path) -> float | None:
             "default=noprint_wrappers=1:nokey=1",
             str(video),
         ],
-        capture_output=True,
-        text=True,
-        timeout=120,
+        timeout=FFPROBE_TIMEOUT_SEC,
     )
-    if r.returncode != 0:
+    if r is None or r.returncode != 0:
         return None
     try:
-        return float(r.stdout.strip())
+        return float(r.stdout.decode("utf-8", errors="replace").strip())
     except ValueError:
         return None
 
@@ -116,18 +130,51 @@ def ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def ffmpeg_segment(
+def _ffmpeg_segment_copy(
+    exe: str,
     src: Path,
     dest: Path,
     start_sec: float,
     duration_sec: float,
     *,
     strip_audio: bool,
+    timeout: int,
 ) -> bool:
-    exe = shutil.which("ffmpeg")
-    if not exe or duration_sec <= 0:
-        return False
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        exe,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        str(max(0.0, start_sec)),
+        "-i",
+        str(src),
+        "-t",
+        str(duration_sec),
+        "-c:v",
+        "copy",
+    ]
+    if strip_audio:
+        cmd.append("-an")
+    cmd.extend(["-movflags", "+faststart", str(dest)])
+    r = _run_subprocess(cmd, timeout=timeout)
+    ok = r is not None and r.returncode == 0 and dest.is_file()
+    if not ok:
+        _unlink_if_exists(dest)
+    return ok
+
+
+def _ffmpeg_segment_encode(
+    exe: str,
+    src: Path,
+    dest: Path,
+    start_sec: float,
+    duration_sec: float,
+    *,
+    strip_audio: bool,
+    timeout: int,
+) -> bool:
     cmd = [
         exe,
         "-hide_banner",
@@ -156,8 +203,37 @@ def ffmpeg_segment(
             str(dest),
         ]
     )
-    r = subprocess.run(cmd, capture_output=True, timeout=600)
-    return r.returncode == 0 and dest.is_file()
+    r = _run_subprocess(cmd, timeout=timeout)
+    ok = r is not None and r.returncode == 0 and dest.is_file()
+    if not ok:
+        _unlink_if_exists(dest)
+    return ok
+
+
+def ffmpeg_segment(
+    src: Path,
+    dest: Path,
+    start_sec: float,
+    duration_sec: float,
+    *,
+    strip_audio: bool,
+) -> str | None:
+    exe = shutil.which("ffmpeg")
+    if not exe or duration_sec <= 0:
+        return "ffmpeg missing or invalid duration"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    timeout = FFMPEG_SEGMENT_TIMEOUT_SEC
+    if FFMPEG_CLIP_TRY_COPY and _ffmpeg_segment_copy(
+        exe, src, dest, start_sec, duration_sec, strip_audio=strip_audio, timeout=timeout
+    ):
+        return None
+    if _ffmpeg_segment_encode(
+        exe, src, dest, start_sec, duration_sec, strip_audio=strip_audio, timeout=timeout
+    ):
+        return None
+    if FFMPEG_CLIP_TRY_COPY:
+        return f"clip encode failed after {timeout}s (copy and libx264)"
+    return f"clip encode failed after {timeout}s"
 
 
 def ffmpeg_frame(video: Path, dest: Path, time_sec: float) -> bool:
@@ -165,7 +241,7 @@ def ffmpeg_frame(video: Path, dest: Path, time_sec: float) -> bool:
     if not exe:
         return False
     dest.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(
+    r = _run_subprocess(
         [
             exe,
             "-hide_banner",
@@ -182,10 +258,12 @@ def ffmpeg_frame(video: Path, dest: Path, time_sec: float) -> bool:
             "2",
             str(dest),
         ],
-        capture_output=True,
-        timeout=300,
+        timeout=FFMPEG_FRAME_TIMEOUT_SEC,
     )
-    return r.returncode == 0 and dest.is_file()
+    ok = r is not None and r.returncode == 0 and dest.is_file()
+    if not ok:
+        _unlink_if_exists(dest)
+    return ok
 
 
 def frames_cv2(video: Path, dest_paths: list[Path]) -> int:
@@ -401,17 +479,18 @@ def run_preprocess(
 
                     out_clip = clips_base / f"{fid}_{stem}_c{i:04d}.mp4"
                     if force or not out_clip.is_file():
-                        ffmpeg_segment(
+                        seg_err = ffmpeg_segment(
                             src,
                             out_clip,
                             start,
                             seg_len,
                             strip_audio=VIDEO_STRIP_AUDIO_ON_CLIPS,
                         )
+                        if seg_err:
+                            record["warnings"].append(
+                                f"failed clip segment i={i} start={start}: {seg_err}"
+                            )
                     if not out_clip.is_file():
-                        record["warnings"].append(
-                            f"failed clip segment i={i} start={start}"
-                        )
                         continue
                     clip_paths.append(str(out_clip.resolve()))
                     eid = embed_row_id(f"vidclip|{out_clip.resolve()}")

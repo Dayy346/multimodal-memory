@@ -27,7 +27,8 @@ services:
     volumes:
       - ./outputs:/app/outputs
       - ./data:/app/data
-      - ${NAS_MOUNT:-/mnt/nas}:/mnt/nas:ro
+      # Host NAS path → same path inside the container (see NAS_MOUNT in .env)
+      - ${NAS_MOUNT:-/mnt/photos}:/mnt/photos:ro
     depends_on:
       db:
         condition: service_healthy

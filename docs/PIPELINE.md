@@ -68,6 +68,19 @@ python scripts/test_embeddings.py
 - **`--limit` / `--max-videos`**: keep costs low while learning.
 - If ffmpeg is missing, either install it or use `--fallback-frames 5` (JPEG frames; weaker than real video clips).
 
+### ffmpeg timeouts (large libraries / NAS)
+
+Preprocess **skips** a video segment when ffmpeg times out instead of failing the whole job. Optional `.env` knobs:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `FFMPEG_SEGMENT_TIMEOUT_SEC` | `1800` | Max seconds per clip segment (copy or re-encode) |
+| `FFMPEG_FRAME_TIMEOUT_SEC` | `300` | Poster / fallback frame extraction |
+| `FFPROBE_TIMEOUT_SEC` | `120` | Duration probe |
+| `FFMPEG_CLIP_TRY_COPY` | `true` | Try fast `-c:v copy` before libx264 re-encode |
+
+iPhone `.mov` on network storage often needs copy mode; re-encoding 118s can exceed 10 minutes.
+
 ## Legacy mode
 
 `python scripts/test_embeddings.py --legacy-glob` uses old JPEG-only globs instead of `embed_manifest.jsonl`.
