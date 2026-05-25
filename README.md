@@ -16,13 +16,19 @@ Project scaffold for multimodal memory (app, scripts, config, data, outputs).
 
 Edit `.env` for local secrets (listed in `.gitignore` so it is not committed).
 
-### Full-stack dev (Postgres + API + UI)
+### Full stack (Docker — recommended on homelab)
 
-1. `make up` — start Postgres (pgvector) via Docker Compose  
-2. `make db-migrate` — apply Alembic migrations  
-3. `make api` — run FastAPI on port 8000  
-4. `make dev-frontend` — Vite dev server on 5173 (proxies `/api` to the API)
+1. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`, `ALLOWED_SCAN_ROOTS`, and `NAS_MOUNT` (host path to your NAS, mounted at `/mnt/nas` in the API container).
+2. `make up` — builds and starts **Postgres**, **FastAPI**, and **web UI** (nginx). Migrations run automatically on API start.
+3. Open **http://\<server-ip\>:5173** (or `WEB_PORT` from `.env`). All `/api` calls go through the same origin — no second terminal.
 
-Set `GEMINI_API_KEY`, `DATABASE_URL`, and comma-separated `ALLOWED_SCAN_ROOTS` in `.env` (see `.env.example`).
+Other commands: `make down`, `make logs`, `make rebuild`, `make db-migrate`.
+
+### Local dev without Docker (optional)
+
+1. `make up` — Postgres only, or use your own DB  
+2. `make db-migrate`  
+3. `make api` — FastAPI on port 8000  
+4. `make dev-frontend` — Vite on 5173 (proxies `/api` to the API)
 
 Pipeline overview, Gemini video limits, and server (NAS) workflow: [docs/PIPELINE.md](docs/PIPELINE.md).

@@ -53,67 +53,66 @@ async function start() {
 </script>
 
 <template>
-  <h1>Index a folder</h1>
-  <p>
-    Pick an allowed server root and optional subfolder. The API only sees paths
-    listed in <code>ALLOWED_SCAN_ROOTS</code>.
+  <h1 class="page-title">Index a folder</h1>
+  <p class="page-lead">
+    Pick an allowed server root and optional subfolder. Paths must be listed in
+    <code>ALLOWED_SCAN_ROOTS</code> on the server.
   </p>
-  <p v-if="err" style="color: #b91c1c">{{ err }}</p>
-  <form
-    @submit.prevent="start"
-    style="display: grid; gap: 0.75rem; max-width: 32rem"
-  >
-    <label>
-      Root
-      <select v-model.number="rootIndex" style="width: 100%; margin-top: 0.25rem">
+
+  <p v-if="err" class="alert-error">{{ err }}</p>
+
+  <form class="card form-grid" @submit.prevent="start">
+    <div class="field">
+      <label for="root">Root</label>
+      <select id="root" v-model.number="rootIndex">
         <option v-for="r in roots" :key="r.index" :value="r.index">
           [{{ r.index }}] {{ r.path }}
         </option>
       </select>
-    </label>
-    <label>
-      Subpath (under root)
+    </div>
+    <div class="field">
+      <label for="subpath">Subpath (under root)</label>
       <input
+        id="subpath"
         v-model="subpath"
         type="text"
-        placeholder="Photos/2024"
-        style="width: 100%; margin-top: 0.25rem"
+        placeholder="library/2023/2023-07-16"
       />
-    </label>
-    <label>
-      Max files
-      <input v-model.number="maxFiles" type="number" min="1" style="width: 100%; margin-top: 0.25rem" />
-    </label>
-    <label>
-      Max videos (empty = no limit)
+    </div>
+    <div class="field">
+      <label for="maxFiles">Max files</label>
+      <input id="maxFiles" v-model.number="maxFiles" type="number" min="1" />
+    </div>
+    <div class="field">
+      <label for="maxVideos">Max videos (empty = no limit)</label>
       <input
+        id="maxVideos"
         v-model.number="maxVideos"
         type="number"
         min="1"
-        style="width: 100%; margin-top: 0.25rem"
         placeholder="optional"
       />
-    </label>
-    <label>
-      Max embed targets
+    </div>
+    <div class="field">
+      <label for="maxEmbed">Max embed targets</label>
       <input
+        id="maxEmbed"
         v-model.number="maxEmbedTargets"
         type="number"
         min="1"
-        style="width: 100%; margin-top: 0.25rem"
       />
-    </label>
-    <label>
-      Chunk seconds (optional)
+    </div>
+    <div class="field">
+      <label for="chunk">Chunk seconds (optional)</label>
       <input
+        id="chunk"
         v-model.number="chunkSeconds"
         type="number"
         min="1"
-        style="width: 100%; margin-top: 0.25rem"
-        placeholder="default from server env"
+        placeholder="server default"
       />
-    </label>
-    <button type="submit" :disabled="busy || roots.length === 0">
+    </div>
+    <button type="submit" class="btn btn-primary" :disabled="busy || roots.length === 0">
       {{ busy ? "Starting…" : "Start indexing job" }}
     </button>
   </form>

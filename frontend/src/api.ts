@@ -12,6 +12,9 @@ export type Job = {
   logs: unknown[];
   created_at: string;
   updated_at: string;
+  progress_percent: number;
+  progress_label: string;
+  progress_step: string;
 };
 
 export type QueryHit = {

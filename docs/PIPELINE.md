@@ -29,7 +29,7 @@ Audio: shorter limits apply if you send audio. This project **strips audio only 
 | `scripts/test_embeddings.py` | Reads `embed_manifest.jsonl`, calls Gemini, prints ranked hits; saves `outputs/logs/embedding_probe.json`. |
 | `requirements.txt` | Python dependencies. |
 | `.env` / `.env.example` | API keys, DB URL, `ALLOWED_SCAN_ROOTS`, CORS (not committed). |
-| `docker-compose.yml` / `Makefile` | Local Postgres + pgvector and common commands. |
+| `docker-compose.yml` / `Makefile` | `make up` — Postgres, API, and web UI in Docker (one command). |
 | `frontend/` | Vue + TypeScript UI for picking allowed roots, watching jobs, and searching. |
 
 Generated (gitignored): `outputs/thumbnails/`, `outputs/clips/`, `outputs/frames/` (fallback only), `outputs/metadata/`, `outputs/logs/`, `outputs/jobs/<job_id>/` (per-indexing workspace).
@@ -44,7 +44,7 @@ The FastAPI app exposes:
 - `POST /api/query` — text search against embeddings for a completed job
 - `GET /api/jobs/{id}/media/thumbnail/{asset_id}` and `.../clip/{embed_target_id}` — previews
 
-Run `make up`, `make db-migrate`, then `make api` and `make dev-frontend` (see root `README.md`).
+Run `make up` and open the web UI on port `WEB_PORT` (default 5173). See root `README.md`.
 
 ## Run order (on your home server, option B)
 

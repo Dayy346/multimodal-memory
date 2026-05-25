@@ -137,6 +137,7 @@ def run_index_job(job_id: uuid.UUID) -> None:
         if len(embed_rows) > max_embed:
             embed_rows = embed_rows[:max_embed]
             _append_log(db, job, f"Truncated embed targets to {max_embed}")
+        _append_log(db, job, f"Prepared {len(embed_rows)} embed targets")
 
         job.status = "embedding"
         job.step = "embed"
@@ -196,8 +197,14 @@ def run_index_job(job_id: uuid.UUID) -> None:
             )
             db.commit()
             done += 1
-            if done % 10 == 0:
-                _append_log(db, job, f"Embedded {done}/{len(embed_rows)}")
+            total_embed = len(embed_rows)
+            job.message = f"Embedding {done}/{total_embed}"
+            job.updated_at = _utcnow()
+            db.add(job)
+            db.commit()
+            log_every = 1 if total_embed <= 30 else 5
+            if done % log_every == 0 or done == total_embed:
+                _append_log(db, job, f"Embedded {done}/{total_embed}")
 
         job.status = "completed"
         job.step = "done"

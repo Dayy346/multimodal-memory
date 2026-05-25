@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbDep, SettingsDep
+from app.api.job_out import job_to_out
 from app.api.schemas import JobCreate, JobOut
 from app.db.models import Job
 from app.services.job_runner import run_index_job
@@ -23,9 +24,9 @@ def _utcnow() -> datetime:
 
 
 @router.get("", response_model=list[JobOut])
-def list_jobs(db: DbDep, limit: int = 50) -> list[Job]:
+def list_jobs(db: DbDep, limit: int = 50) -> list[JobOut]:
     stmt = select(Job).order_by(Job.created_at.desc()).limit(min(limit, 200))
-    return list(db.scalars(stmt).all())
+    return [job_to_out(j) for j in db.scalars(stmt).all()]
 
 
 @router.post("", response_model=JobOut, status_code=201)
@@ -34,7 +35,7 @@ def create_job(
     db: DbDep,
     settings: SettingsDep,
     tasks: BackgroundTasks,
-) -> Job:
+) -> JobOut:
     try:
         scan_dir = resolve_scan_directory(settings, body.root_index, body.subpath)
     except ValueError as e:
@@ -64,12 +65,12 @@ def create_job(
     db.commit()
     db.refresh(job)
     tasks.add_task(run_index_job, job.id)
-    return job
+    return job_to_out(job)
 
 
 @router.get("/{job_id}", response_model=JobOut)
-def get_job(job_id: uuid.UUID, db: DbDep) -> Job:
+def get_job(job_id: uuid.UUID, db: DbDep) -> JobOut:
     job = db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return job_to_out(job)

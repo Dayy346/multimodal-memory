@@ -52,6 +52,9 @@ class JobOut(BaseModel):
     logs: list[Any]
     created_at: datetime
     updated_at: datetime
+    progress_percent: int = 0
+    progress_label: str = ""
+    progress_step: str = "queued"
 
     model_config = {"from_attributes": True}
 
