@@ -10,6 +10,7 @@ from app.db.models import Job
 _FOUND_RE = re.compile(r"Found (\d+) media files")
 _PREPARED_RE = re.compile(r"Prepared (\d+) embed targets")
 _EMBED_RE = re.compile(r"Embedded (\d+)/(\d+)")
+_EMBED_NEW_RE = re.compile(r"Embedded new (\d+)/(\d+)")
 
 
 def _log_strings(logs: list[Any] | None) -> list[str]:
@@ -48,15 +49,22 @@ def compute_job_progress(job: Job) -> tuple[int, str, str]:
         m = _PREPARED_RE.search(line)
         if m:
             prepared_n = int(m.group(1))
-        m = _EMBED_RE.search(line)
+        m = _EMBED_NEW_RE.search(line)
         if m:
             embed_done = int(m.group(1))
             embed_total = int(m.group(2))
+        else:
+            m = _EMBED_RE.search(line)
+            if m:
+                embed_done = int(m.group(1))
+                embed_total = int(m.group(2))
 
-    max_embed = int(opts.get("max_embed_targets") or 200)
+    max_embed = int(
+        opts.get("max_new_embed_targets") or opts.get("max_embed_targets") or 200
+    )
 
-    if status in ("pending",) or step in ("queued",):
-        return 2, "Waiting to start…", "queued"
+    if status in ("pending",) or step in ("queued", "extend_queued"):
+        return 2, job.message or "Waiting to start…", "queued"
 
     if status == "scanning" or step == "scan":
         if found_n is not None:

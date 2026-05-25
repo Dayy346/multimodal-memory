@@ -22,6 +22,8 @@ Edit `.env` for local secrets (listed in `.gitignore` so it is not committed).
 2. `make up` — builds and starts **Postgres**, **FastAPI**, and **web UI** (nginx). Migrations run automatically on API start.
 3. Open **http://\<server-ip\>:5173** (or `WEB_PORT` from `.env`). All `/api` calls go through the same origin — no second terminal.
 
+**Extend** (`/extend`): add vectors to an existing index; skips duplicate `embed_id` (no repeat Gemini calls for the same clip/image).
+
 Other commands: `make down`, `make logs`, `make rebuild`, `make db-migrate`.
 
 **HEIC thumbnails on an old job** (after rebuilding API with HEIC support):

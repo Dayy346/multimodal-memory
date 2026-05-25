@@ -40,6 +40,39 @@ class JobCreate(BaseModel):
         return v
 
 
+class JobExtend(BaseModel):
+    max_files: int | None = Field(default=10_000, ge=1, le=500_000)
+    max_videos: int | None = None
+    max_new_embed_targets: int = Field(default=200, ge=1, le=50_000)
+    chunk_seconds: float | None = None
+    thumb_max: int | None = Field(default=None, ge=64, le=4096)
+    video_poster: bool | None = None
+    fallback_frames: int | None = Field(default=None, ge=0, le=30)
+
+    @field_validator("chunk_seconds")
+    @classmethod
+    def chunk_seconds_positive(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
+            raise ValueError("chunk_seconds must be > 0 when set")
+        return v
+
+    @field_validator("max_videos")
+    @classmethod
+    def max_videos_positive(cls, v: int | None) -> int | None:
+        if v is not None and v < 1:
+            raise ValueError("max_videos must be >= 1 when set")
+        return v
+
+
+class JobSummary(BaseModel):
+    job_id: uuid.UUID
+    status: str
+    scan_root: str
+    vector_count: int
+    embed_target_count: int
+    asset_count: int
+
+
 class JobOut(BaseModel):
     id: uuid.UUID
     status: str

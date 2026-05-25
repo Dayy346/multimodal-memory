@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { fetchJobs, runQuery, type QueryHit } from "../api";
 
 const route = useRoute();
@@ -63,7 +63,15 @@ function basename(path: string) {
 
 <template>
   <h1 class="page-title">Search</h1>
-  <p v-if="jobsHint" class="page-lead">{{ jobsHint }}</p>
+  <p v-if="jobsHint" class="page-lead">
+    {{ jobsHint }}
+    <template v-if="jobId">
+      —
+      <RouterLink :to="{ name: 'extend', query: { job: jobId } }">
+        Add more vectors
+      </RouterLink>
+    </template>
+  </p>
 
   <form class="card form-grid" style="max-width: 40rem" @submit.prevent="search">
     <div class="field">

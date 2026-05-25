@@ -1,5 +1,14 @@
 export type RootEntry = { index: number; path: string };
 
+export type JobSummary = {
+  job_id: string;
+  status: string;
+  scan_root: string;
+  vector_count: number;
+  embed_target_count: number;
+  asset_count: number;
+};
+
 export type Job = {
   id: string;
   status: string;
@@ -53,6 +62,23 @@ export async function fetchJobs(): Promise<Job[]> {
 
 export async function fetchJob(id: string): Promise<Job> {
   const r = await fetch(`/api/jobs/${id}`);
+  return parseJson<Job>(r);
+}
+
+export async function fetchJobSummary(id: string): Promise<JobSummary> {
+  const r = await fetch(`/api/jobs/${id}/summary`);
+  return parseJson<JobSummary>(r);
+}
+
+export async function extendJob(
+  jobId: string,
+  body: Record<string, unknown>,
+): Promise<Job> {
+  const r = await fetch(`/api/jobs/${jobId}/extend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   return parseJson<Job>(r);
 }
 

@@ -6,13 +6,14 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbDep, SettingsDep
 from app.api.job_out import job_to_out
-from app.api.schemas import JobCreate, JobOut
-from app.db.models import Job
+from app.api.schemas import JobCreate, JobExtend, JobOut, JobSummary
+from app.db.models import Asset, EmbedTarget, Embedding, Job
+from app.services.job_extend import assert_job_extendable, job_vector_count, run_extend_job
 from app.services.job_runner import run_index_job
 from app.services.paths import resolve_scan_directory
 
@@ -73,4 +74,70 @@ def get_job(job_id: uuid.UUID, db: DbDep) -> JobOut:
     job = db.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    return job_to_out(job)
+
+
+@router.get("/{job_id}/summary", response_model=JobSummary)
+def get_job_summary(job_id: uuid.UUID, db: DbDep) -> JobSummary:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    assets = int(
+        db.scalar(select(func.count()).select_from(Asset).where(Asset.job_id == job_id))
+        or 0
+    )
+    targets = int(
+        db.scalar(
+            select(func.count()).select_from(EmbedTarget).where(EmbedTarget.job_id == job_id)
+        )
+        or 0
+    )
+    return JobSummary(
+        job_id=job.id,
+        status=job.status,
+        scan_root=job.scan_root,
+        vector_count=job_vector_count(db, job_id),
+        embed_target_count=targets,
+        asset_count=assets,
+    )
+
+
+@router.post("/{job_id}/extend", response_model=JobOut)
+def extend_job(
+    job_id: uuid.UUID,
+    body: JobExtend,
+    db: DbDep,
+    tasks: BackgroundTasks,
+) -> JobOut:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        assert_job_extendable(job)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+    prior = dict(job.options or {})
+    raw = {
+        "max_files": body.max_files,
+        "max_videos": body.max_videos,
+        "max_new_embed_targets": body.max_new_embed_targets,
+        "chunk_seconds": body.chunk_seconds,
+        "thumb_max": body.thumb_max,
+        "video_poster": body.video_poster,
+        "fallback_frames": body.fallback_frames,
+    }
+    for k, v in raw.items():
+        if v is not None:
+            prior[k] = v
+    job.options = prior
+    job.status = "pending"
+    job.step = "extend_queued"
+    job.message = "Queued: add new vectors (skip duplicates)"
+    job.error = None
+    job.updated_at = _utcnow()
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    tasks.add_task(run_extend_job, job.id)
     return job_to_out(job)

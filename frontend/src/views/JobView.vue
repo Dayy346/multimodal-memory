@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import JobProgress from "../components/JobProgress.vue";
 import { fetchJob, type Job } from "../api";
 
@@ -92,10 +92,17 @@ function shortId(id: string) {
       </p>
     </div>
 
-    <div v-if="job.status === 'completed'" class="actions">
+    <div v-if="job.status === 'completed' || job.status === 'failed'" class="actions">
       <button type="button" class="btn btn-primary" @click="goSearch">
         Search this library
       </button>
+      <RouterLink
+        :to="{ name: 'extend', query: { job: jobId() } }"
+        class="btn btn-secondary"
+        style="margin-left: 0.5rem"
+      >
+        Add more vectors
+      </RouterLink>
     </div>
   </div>
 
