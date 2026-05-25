@@ -24,6 +24,15 @@ Edit `.env` for local secrets (listed in `.gitignore` so it is not committed).
 
 Other commands: `make down`, `make logs`, `make rebuild`, `make db-migrate`.
 
+**HEIC thumbnails on an old job** (after rebuilding API with HEIC support):
+
+```bash
+docker compose up -d --build api
+JOB_ID=8a8c6bbd-83e2-43f8-9935-b93798a19572 make backfill-thumbs
+```
+
+Or: `docker compose exec api python scripts/backfill_thumbnails.py --job-id <uuid> --heic-only`
+
 ### Local dev without Docker (optional)
 
 1. `make up` — Postgres only, or use your own DB  

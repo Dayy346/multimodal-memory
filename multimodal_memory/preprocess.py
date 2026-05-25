@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from PIL import Image
+from multimodal_memory.images import write_thumbnail_jpeg
 
 from config.settings import (
     CLIPS_DIR as DEFAULT_CLIPS_DIR,
@@ -66,6 +66,8 @@ def guess_mime(path: Path) -> str:
         return "image/png"
     if ext == ".webp":
         return "image/webp"
+    if ext in {".heic", ".heif"}:
+        return "image/heic"
     if ext in {".mp4", ".m4v"}:
         return "video/mp4"
     if ext == ".mov":
@@ -78,15 +80,7 @@ def guess_mime(path: Path) -> str:
 
 
 def write_thumbnail(src: Path, dest: Path, max_side: int) -> bool:
-    try:
-        with Image.open(src) as im:
-            im = im.convert("RGB")
-            im.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            im.save(dest, "JPEG", quality=88, optimize=True)
-    except OSError:
-        return False
-    return dest.is_file()
+    return write_thumbnail_jpeg(src, dest, max_side)
 
 
 def _run_subprocess(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess | None:

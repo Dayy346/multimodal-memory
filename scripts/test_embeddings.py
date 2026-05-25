@@ -24,6 +24,7 @@ from config.settings import (  # noqa: E402
     ensure_output_dirs,
 )
 from multimodal_memory.embed import embed_bytes, embed_text, get_client  # noqa: E402
+from multimodal_memory.images import load_embed_payload  # noqa: E402
 from multimodal_memory.preprocess import read_embed_manifest_jsonl  # noqa: E402
 
 
@@ -164,10 +165,13 @@ def main() -> None:
         if not p.is_file():
             print(f"skip missing file: {p}")
             continue
-        mime = row.get("mime_type") or mimetypes.guess_type(str(p))[0]
-        if not mime:
-            mime = "application/octet-stream"
-        data = p.read_bytes()
+        if row.get("modality") == "image":
+            data, mime = load_embed_payload(p)
+        else:
+            mime = row.get("mime_type") or mimetypes.guess_type(str(p))[0]
+            if not mime:
+                mime = "application/octet-stream"
+            data = p.read_bytes()
         size_mb = len(data) / (1024 * 1024)
         if size_mb > 80:
             print(f"warning: large payload {size_mb:.1f} MB — {p.name}")

@@ -87,5 +87,5 @@ iPhone `.mov` on network storage often needs copy mode; re-encoding 118s can exc
 
 ## What “originals preserved” means
 
-- Images: embedding reads from the **source path** in the manifest.
+- Images: embedding reads from the **source path** (HEIC/HEIF transcoded to JPEG for the API; thumbnails saved as JPEG for the browser).
 - Videos: long files are **not overwritten**; new files appear only under **`outputs/clips/`** (plus optional posters under `outputs/thumbnails/`).
