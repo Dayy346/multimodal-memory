@@ -11,9 +11,10 @@ const busy = ref(false);
 const rootIndex = ref(0);
 const subpath = ref("");
 const maxFiles = ref(500);
-const maxVideos = ref<number | null>(20);
+const maxVideos = ref<number | null>(0);
 const maxEmbedTargets = ref(200);
 const chunkSeconds = ref<number | null>(null);
+const skipThumbnails = ref(true);
 
 onMounted(async () => {
   try {
@@ -42,6 +43,7 @@ async function start() {
       max_videos: mv,
       max_embed_targets: maxEmbedTargets.value,
       chunk_seconds: cs,
+      skip_thumbnails: skipThumbnails.value,
     });
     await router.push({ name: "job", params: { id: job.id } });
   } catch (e) {
@@ -84,12 +86,12 @@ async function start() {
       <input id="maxFiles" v-model.number="maxFiles" type="number" min="1" />
     </div>
     <div class="field">
-      <label for="maxVideos">Max videos (empty = no limit)</label>
+      <label for="maxVideos">Max videos (0 = photos only, skip ffmpeg)</label>
       <input
         id="maxVideos"
         v-model.number="maxVideos"
         type="number"
-        min="1"
+        min="0"
         placeholder="optional"
       />
     </div>
@@ -112,8 +114,33 @@ async function start() {
         placeholder="server default"
       />
     </div>
+    <div class="field checkbox-field">
+      <label>
+        <input v-model="skipThumbnails" type="checkbox" />
+        Skip thumbnails (much faster for photo-only indexing)
+      </label>
+      <span class="field-hint">
+        Thumbnails are only for search previews — embedding uses original files.
+      </span>
+    </div>
     <button type="submit" class="btn btn-primary" :disabled="busy || roots.length === 0">
       {{ busy ? "Starting…" : "Start indexing job" }}
     </button>
   </form>
 </template>
+
+<style scoped>
+.checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+</style>

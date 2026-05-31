@@ -11,9 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbDep, SettingsDep
 from app.api.job_out import job_to_out
-from app.api.schemas import JobCreate, JobExtend, JobOut, JobSummary
+from app.api.schemas import JobCreate, JobExtend, JobOut, JobResume, JobSummary
 from app.db.models import Asset, EmbedTarget, Embedding, Job
 from app.services.job_extend import assert_job_extendable, job_vector_count, run_extend_job
+from app.services.job_resume import assert_job_resumable, run_resume_job
 from app.services.job_runner import run_index_job
 from app.services.paths import resolve_scan_directory
 
@@ -50,6 +51,7 @@ def create_job(
         "thumb_max": body.thumb_max,
         "video_poster": body.video_poster,
         "fallback_frames": body.fallback_frames,
+        "skip_thumbnails": body.skip_thumbnails,
     }
     opts = {k: v for k, v in raw_opts.items() if v is not None}
     job = Job(
@@ -126,6 +128,7 @@ def extend_job(
         "thumb_max": body.thumb_max,
         "video_poster": body.video_poster,
         "fallback_frames": body.fallback_frames,
+        "skip_thumbnails": body.skip_thumbnails,
     }
     for k, v in raw.items():
         if v is not None:
@@ -140,4 +143,36 @@ def extend_job(
     db.commit()
     db.refresh(job)
     tasks.add_task(run_extend_job, job.id)
+    return job_to_out(job)
+
+
+@router.post("/{job_id}/resume", response_model=JobOut)
+def resume_job(
+    job_id: uuid.UUID,
+    body: JobResume,
+    db: DbDep,
+    tasks: BackgroundTasks,
+) -> JobOut:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        assert_job_resumable(job)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+    prior = dict(job.options or {})
+    if body.max_new_embed_targets is not None:
+        prior["max_new_embed_targets"] = body.max_new_embed_targets
+    prior["skip_preprocess"] = body.skip_preprocess
+    job.options = prior
+    job.status = "pending"
+    job.step = "resume_queued"
+    job.message = "Queued: continue embedding (skip duplicates)"
+    job.error = None
+    job.updated_at = _utcnow()
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    tasks.add_task(run_resume_job, job.id)
     return job_to_out(job)

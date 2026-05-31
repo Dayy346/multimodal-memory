@@ -113,6 +113,16 @@ def run_extend_job(job_id: uuid.UUID) -> None:
         db.add(job)
         db.commit()
 
+        skip_videos = max_videos_i is not None and max_videos_i <= 0
+
+        def _preprocess_progress(done: int, total: int) -> None:
+            job.message = f"Extend: preparing media {done}/{total}"
+            job.updated_at = _utcnow()
+            db.add(job)
+            db.commit()
+            if done == 1 or done == total or done % max(1, total // 10) == 0:
+                _append_log(db, job, f"Preprocessed {done}/{total} assets")
+
         run_preprocess(
             manifest_path,
             embed_manifest_path=embed_manifest_path,
@@ -123,6 +133,9 @@ def run_extend_job(job_id: uuid.UUID) -> None:
             fallback_frames=fallback_frames,
             force=False,
             max_videos=max_videos_i,
+            skip_thumbnails=bool(opts.get("skip_thumbnails", False)),
+            skip_videos=skip_videos,
+            progress_callback=_preprocess_progress,
             use_global_output_dirs=False,
             thumbnails_dir=thumbs_dir,
             frames_dir=frames_dir,

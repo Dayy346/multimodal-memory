@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import jobs, media, query, roots
+from app.api import jobs, media, query, roots, settings
 from app.core.config import get_settings
 from config.settings import ensure_output_dirs
 
@@ -32,6 +32,7 @@ def create_app() -> FastAPI:
     application.include_router(jobs.router, prefix="/api")
     application.include_router(query.router, prefix="/api")
     application.include_router(media.router, prefix="/api")
+    application.include_router(settings.router, prefix="/api")
 
     @application.get("/api/health")
     def health() -> dict[str, str]:

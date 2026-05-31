@@ -9,6 +9,7 @@ from app.db.models import Job
 
 _FOUND_RE = re.compile(r"Found (\d+) media files")
 _PREPARED_RE = re.compile(r"Prepared (\d+) embed targets")
+_PREPROCESSED_RE = re.compile(r"Preprocessed (\d+)/(\d+)")
 _EMBED_RE = re.compile(r"Embedded (\d+)/(\d+)")
 _EMBED_NEW_RE = re.compile(r"Embedded new (\d+)/(\d+)")
 
@@ -63,7 +64,7 @@ def compute_job_progress(job: Job) -> tuple[int, str, str]:
         opts.get("max_new_embed_targets") or opts.get("max_embed_targets") or 200
     )
 
-    if status in ("pending",) or step in ("queued", "extend_queued"):
+    if status in ("pending",) or step in ("queued", "extend_queued", "resume_queued"):
         return 2, job.message or "Waiting to start…", "queued"
 
     if status == "scanning" or step == "scan":
@@ -73,8 +74,18 @@ def compute_job_progress(job: Job) -> tuple[int, str, str]:
 
     if status == "preprocessing" or step == "preprocess":
         label = job.message or "Thumbnails and video clips…"
+        prep_done = 0
+        prep_total = 0
+        for line in logs:
+            m = _PREPROCESSED_RE.search(line)
+            if m:
+                prep_done = int(m.group(1))
+                prep_total = int(m.group(2))
         if prepared_n is not None:
             return 40, f"Prepared {prepared_n} embed targets", "preprocess"
+        if prep_total > 0 and prep_done > 0:
+            pct = 28 + round(10 * min(prep_done / prep_total, 1.0))
+            return pct, f"Preparing media {prep_done} / {prep_total}", "preprocess"
         if found_n is not None:
             return 32, label, "preprocess"
         return 28, label, "preprocess"

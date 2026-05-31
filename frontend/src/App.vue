@@ -21,6 +21,7 @@ function navClass(path: string) {
           <RouterLink to="/" :class="navClass('/')">Index</RouterLink>
           <RouterLink to="/extend" :class="navClass('/extend')">Extend</RouterLink>
           <RouterLink to="/search" :class="navClass('/search')">Search</RouterLink>
+          <RouterLink to="/settings" :class="navClass('/settings')">Settings</RouterLink>
         </nav>
       </div>
     </header>

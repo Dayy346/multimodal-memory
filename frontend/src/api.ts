@@ -82,6 +82,37 @@ export async function extendJob(
   return parseJson<Job>(r);
 }
 
+export async function resumeJob(
+  jobId: string,
+  body: { max_new_embed_targets?: number; skip_preprocess?: boolean } = {},
+): Promise<Job> {
+  const r = await fetch(`/api/jobs/${jobId}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return parseJson<Job>(r);
+}
+
+export type GeminiKeyStatus = {
+  configured: boolean;
+  masked_key: string | null;
+};
+
+export async function fetchGeminiKeyStatus(): Promise<GeminiKeyStatus> {
+  const r = await fetch("/api/settings/gemini");
+  return parseJson<GeminiKeyStatus>(r);
+}
+
+export async function updateGeminiKey(apiKey: string): Promise<GeminiKeyStatus> {
+  const r = await fetch("/api/settings/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return parseJson<GeminiKeyStatus>(r);
+}
+
 export async function createJob(body: Record<string, unknown>): Promise<Job> {
   const r = await fetch("/api/jobs", {
     method: "POST",

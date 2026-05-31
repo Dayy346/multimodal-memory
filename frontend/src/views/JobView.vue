@@ -2,13 +2,16 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import JobProgress from "../components/JobProgress.vue";
-import { fetchJob, type Job } from "../api";
+import { fetchJob, fetchJobSummary, resumeJob, type Job, type JobSummary } from "../api";
 
 const props = defineProps<{ id: string }>();
 const route = useRoute();
 const router = useRouter();
 const job = ref<Job | null>(null);
+const summary = ref<JobSummary | null>(null);
 const err = ref("");
+const resumeBusy = ref(false);
+const maxResumeEmbed = ref(200);
 let timer: ReturnType<typeof setInterval> | null = null;
 
 const jobId = () => String(props.id || route.params.id);
@@ -28,11 +31,28 @@ const isActive = computed(
     job.value.status !== "failed",
 );
 
+const canResume = computed(() => {
+  if (!job.value) return false;
+  if (job.value.status === "failed") return true;
+  if (job.value.status !== "completed") return false;
+  if (!summary.value) return false;
+  return summary.value.embed_target_count > summary.value.vector_count;
+});
+
+async function loadSummary() {
+  try {
+    summary.value = await fetchJobSummary(jobId());
+  } catch {
+    summary.value = null;
+  }
+}
+
 async function load() {
   try {
     job.value = await fetchJob(jobId());
     err.value = "";
     if (job.value.status === "completed" || job.value.status === "failed") {
+      await loadSummary();
       if (timer) {
         clearInterval(timer);
         timer = null;
@@ -40,6 +60,24 @@ async function load() {
     }
   } catch (e) {
     err.value = String(e);
+  }
+}
+
+async function continueEmbedding() {
+  err.value = "";
+  resumeBusy.value = true;
+  try {
+    job.value = await resumeJob(jobId(), {
+      max_new_embed_targets: maxResumeEmbed.value,
+      skip_preprocess: true,
+    });
+    if (timer) clearInterval(timer);
+    timer = setInterval(load, 2000);
+    await load();
+  } catch (e) {
+    err.value = String(e);
+  } finally {
+    resumeBusy.value = false;
   }
 }
 
@@ -92,6 +130,35 @@ function shortId(id: string) {
       </p>
     </div>
 
+    <div v-if="summary" class="summary-box">
+      <p><strong>Vectors:</strong> {{ summary.vector_count }}</p>
+      <p><strong>Embed targets:</strong> {{ summary.embed_target_count }}</p>
+    </div>
+
+    <div v-if="canResume" class="resume-box">
+      <p class="resume-lead">
+        Continue where embedding left off — skips scan/preprocess and already-indexed
+        files (same <code>embed_id</code>).
+      </p>
+      <div class="field inline-field">
+        <label for="maxResume">Max embeds this run</label>
+        <input
+          id="maxResume"
+          v-model.number="maxResumeEmbed"
+          type="number"
+          min="1"
+        />
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary"
+        :disabled="resumeBusy"
+        @click="continueEmbedding"
+      >
+        {{ resumeBusy ? "Starting…" : "Continue embedding" }}
+      </button>
+    </div>
+
     <div v-if="job.status === 'completed' || job.status === 'failed'" class="actions">
       <button type="button" class="btn btn-primary" @click="goSearch">
         Search this library
@@ -130,6 +197,46 @@ function shortId(id: string) {
   margin-top: 1rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
+}
+
+.summary-box {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--accent-soft);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.summary-box p {
+  margin: 0.2rem 0;
+}
+
+.resume-box {
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #eef2ff;
+}
+
+.resume-lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  color: #4338ca;
+}
+
+.inline-field {
+  margin-bottom: 0.65rem;
+}
+
+.inline-field label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.inline-field input {
+  width: 8rem;
 }
 
 .section-title {

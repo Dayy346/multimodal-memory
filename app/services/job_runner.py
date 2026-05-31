@@ -99,6 +99,16 @@ def run_index_job(job_id: uuid.UUID) -> None:
         db.add(job)
         db.commit()
 
+        skip_videos = max_videos_i is not None and max_videos_i <= 0
+
+        def _preprocess_progress(done: int, total: int) -> None:
+            job.message = f"Preparing media {done}/{total}"
+            job.updated_at = _utcnow()
+            db.add(job)
+            db.commit()
+            if done == 1 or done == total or done % max(1, total // 10) == 0:
+                _append_log(db, job, f"Preprocessed {done}/{total} assets")
+
         run_preprocess(
             manifest_path,
             embed_manifest_path=embed_manifest_path,
@@ -109,6 +119,9 @@ def run_index_job(job_id: uuid.UUID) -> None:
             fallback_frames=fallback_frames,
             force=False,
             max_videos=max_videos_i,
+            skip_thumbnails=bool(opts.get("skip_thumbnails", False)),
+            skip_videos=skip_videos,
+            progress_callback=_preprocess_progress,
             use_global_output_dirs=False,
             thumbnails_dir=thumbs_dir,
             frames_dir=frames_dir,
@@ -134,7 +147,20 @@ def run_index_job(job_id: uuid.UUID) -> None:
                     )
             db.commit()
 
-        embed_rows = read_embed_manifest_jsonl(embed_manifest_path)
+        existing_embed_ids = set(
+            db.scalars(
+                select(EmbedTarget.embed_id).where(EmbedTarget.job_id == job_id)
+            ).all()
+        )
+        all_embed_rows = read_embed_manifest_jsonl(embed_manifest_path)
+        embed_rows = [
+            er
+            for er in all_embed_rows
+            if str(er.get("embed_id") or "") not in existing_embed_ids
+        ]
+        skipped = len(all_embed_rows) - len(embed_rows)
+        if skipped:
+            _append_log(db, job, f"Skipped {skipped} already indexed (duplicate embed_id)")
         if len(embed_rows) > max_embed:
             embed_rows = embed_rows[:max_embed]
             _append_log(db, job, f"Truncated embed targets to {max_embed}")
@@ -153,6 +179,10 @@ def run_index_job(job_id: uuid.UUID) -> None:
 
         done = 0
         for er in embed_rows:
+            embed_id = str(er.get("embed_id") or "")
+            if embed_id in existing_embed_ids:
+                continue
+
             p = Path(str(er.get("path") or ""))
             if not p.is_file():
                 _append_log(db, job, f"skip missing embed file: {p}")
@@ -161,7 +191,7 @@ def run_index_job(job_id: uuid.UUID) -> None:
             et = EmbedTarget(
                 job_id=job.id,
                 asset_external_key=str(er.get("asset_id") or ""),
-                embed_id=str(er.get("embed_id") or ""),
+                embed_id=embed_id,
                 modality=str(er.get("modality") or "image"),
                 path=str(p.resolve()),
                 mime_type=str(er.get("mime_type") or "application/octet-stream"),
@@ -201,6 +231,7 @@ def run_index_job(job_id: uuid.UUID) -> None:
                 )
             )
             db.commit()
+            existing_embed_ids.add(embed_id)
             done += 1
             total_embed = len(embed_rows)
             job.message = f"Embedding {done}/{total_embed}"

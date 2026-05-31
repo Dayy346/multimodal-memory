@@ -300,6 +300,9 @@ def run_preprocess(
     fallback_frames: int = 0,
     force: bool = False,
     max_videos: int | None = None,
+    skip_thumbnails: bool = False,
+    skip_videos: bool = False,
+    progress_callback=None,
     use_global_output_dirs: bool = True,
     thumbnails_dir: Path | None = None,
     frames_dir: Path | None = None,
@@ -329,12 +332,20 @@ def run_preprocess(
     videos_done = 0
     ffmpeg_ok = ffmpeg_available()
     embed_lines = 0
+    processed = 0
+    total_rows = len(rows)
+    log_every = max(1, total_rows // 20) if total_rows else 1
 
     with (
         embed_manifest_path.open("w", encoding="utf-8") as emb_f,
         artifact_path.open("w", encoding="utf-8") as art_f,
     ):
         for row in rows:
+            processed += 1
+            if progress_callback and (
+                processed == 1 or processed % log_every == 0 or processed == total_rows
+            ):
+                progress_callback(processed, total_rows)
             src = Path(row["path"])
             if not src.is_file():
                 continue
@@ -348,11 +359,12 @@ def run_preprocess(
             }
 
             if row["kind"] == "image":
-                dest = thumbs_base / f"{fid}_{stem}.jpg"
-                if force or not dest.is_file():
-                    write_thumbnail(src, dest, thumb_max)
-                if dest.is_file():
-                    record["thumbnail_path"] = str(dest)
+                if not skip_thumbnails:
+                    dest = thumbs_base / f"{fid}_{stem}.jpg"
+                    if force or not dest.is_file():
+                        write_thumbnail(src, dest, thumb_max)
+                    if dest.is_file():
+                        record["thumbnail_path"] = str(dest)
 
                 mime = guess_mime(src)
                 eid = embed_row_id(f"img|{src.resolve()}|{mime}")
@@ -372,6 +384,10 @@ def run_preprocess(
                 embed_lines += 1
 
             elif row["kind"] == "video":
+                if skip_videos or (max_videos is not None and max_videos <= 0):
+                    record["warnings"].append("skipped: videos disabled for this run")
+                    art_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    continue
                 if max_videos is not None and videos_done >= max_videos:
                     record["warnings"].append("skipped: max_videos reached")
                     art_f.write(json.dumps(record, ensure_ascii=False) + "\n")
