@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { RouterLink } from "vue-router";
 import {
   extendJob,
   fetchJobSummary,
@@ -23,8 +24,14 @@ const chunkSeconds = ref<number | null>(null);
 
 const selectableJobs = computed(() =>
   jobs.value.filter((j) =>
-    ["completed", "failed"].includes(j.status),
+    ["completed", "failed", "preprocessing", "embedding", "scanning", "pending"].includes(
+      j.status,
+    ),
   ),
+);
+
+const extendableJobs = computed(() =>
+  jobs.value.filter((j) => ["completed", "failed"].includes(j.status)),
 );
 
 async function loadJobs() {
@@ -115,6 +122,11 @@ async function startExtend() {
           {{ j.id.slice(0, 8) }}… — {{ j.status }} — {{ j.scan_root }}
         </option>
       </select>
+      <span v-if="jobId && !extendableJobs.some((j) => j.id === jobId)" class="field-hint">
+        This job is still running or stuck — use
+        <RouterLink :to="{ name: 'job', params: { id: jobId } }">Open job</RouterLink>
+        and Continue embedding instead of Extend.
+      </span>
     </div>
 
     <div v-if="summary" class="summary-box">
@@ -158,7 +170,7 @@ async function startExtend() {
     <button
       type="submit"
       class="btn btn-primary"
-      :disabled="busy || !jobId || selectableJobs.length === 0"
+      :disabled="busy || !jobId || !extendableJobs.some((j) => j.id === jobId)"
     >
       {{ busy ? "Starting…" : "Add new vectors" }}
     </button>

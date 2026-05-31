@@ -19,6 +19,7 @@ function navClass(path: string) {
         <RouterLink to="/" class="brand">Multimodal Memory</RouterLink>
         <nav class="nav">
           <RouterLink to="/" :class="navClass('/')">Index</RouterLink>
+          <RouterLink to="/jobs" :class="navClass('/jobs')">Jobs</RouterLink>
           <RouterLink to="/extend" :class="navClass('/extend')">Extend</RouterLink>
           <RouterLink to="/search" :class="navClass('/search')">Search</RouterLink>
           <RouterLink to="/settings" :class="navClass('/settings')">Settings</RouterLink>

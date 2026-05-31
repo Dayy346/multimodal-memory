@@ -26,7 +26,7 @@ def _utcnow() -> datetime:
 
 
 @router.get("", response_model=list[JobOut])
-def list_jobs(db: DbDep, limit: int = 50) -> list[JobOut]:
+def list_jobs(db: DbDep, limit: int = 200) -> list[JobOut]:
     stmt = select(Job).order_by(Job.created_at.desc()).limit(min(limit, 200))
     return [job_to_out(j) for j in db.scalars(stmt).all()]
 

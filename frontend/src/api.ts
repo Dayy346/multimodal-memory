@@ -56,7 +56,7 @@ export async function fetchRoots(): Promise<RootEntry[]> {
 }
 
 export async function fetchJobs(): Promise<Job[]> {
-  const r = await fetch("/api/jobs");
+  const r = await fetch("/api/jobs?limit=200");
   return parseJson<Job[]>(r);
 }
 
