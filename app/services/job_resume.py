@@ -15,7 +15,11 @@ from app.db.session import SessionLocal
 from config.settings import JOBS_DIR
 from multimodal_memory.embed import embed_bytes, get_client
 from multimodal_memory.images import load_embed_payload
-from multimodal_memory.preprocess import read_embed_manifest_jsonl, run_preprocess
+from multimodal_memory.preprocess import (
+    build_embed_manifest_fast,
+    read_embed_manifest_jsonl,
+    run_preprocess,
+)
 from multimodal_memory.scan import iter_media_files, write_manifest_jsonl
 
 from app.services.job_extend import job_vector_count
@@ -258,6 +262,29 @@ def run_resume_job(job_id: uuid.UUID) -> None:
                 _sync_thumbnails_from_artifacts(db, job, artifact_path)
         else:
             _append_log(db, job, "Skipped scan/preprocess — using existing embed manifest")
+
+        manifest_lines = 0
+        if embed_manifest_path.is_file():
+            manifest_lines = len(read_embed_manifest_jsonl(embed_manifest_path))
+        if manifest_lines < had_vectors // 2 and had_vectors > 50:
+            if not manifest_path.is_file():
+                scan_path = Path(job.scan_root)
+                max_files = int(opts.get("max_files") or 500)
+                rows = iter_media_files([scan_path], max_files)
+                write_manifest_jsonl(rows, manifest_path)
+            max_videos = opts.get("max_videos")
+            max_videos_i = int(max_videos) if max_videos is not None else None
+            _append_log(
+                db,
+                job,
+                f"Embed manifest incomplete ({manifest_lines} lines) — rebuilding fast",
+            )
+            built = build_embed_manifest_fast(
+                manifest_path,
+                embed_manifest_path,
+                skip_videos=max_videos_i is None or max_videos_i <= 0,
+            )
+            _append_log(db, job, f"Fast manifest rebuilt with {built} image targets")
 
         all_rows = read_embed_manifest_jsonl(embed_manifest_path)
         done = _embed_rows(

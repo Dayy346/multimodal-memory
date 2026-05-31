@@ -17,7 +17,7 @@ const busy = ref(false);
 
 const jobId = ref("");
 const maxFiles = ref(6000);
-const maxVideos = ref<number | null>(null);
+const maxVideos = ref<number | null>(0);
 const maxNewEmbed = ref(200);
 const chunkSeconds = ref<number | null>(null);
 
@@ -79,6 +79,7 @@ async function startExtend() {
       max_videos: mv,
       max_new_embed_targets: maxNewEmbed.value,
       chunk_seconds: cs,
+      skip_thumbnails: true,
     });
     await router.push({ name: "job", params: { id: job.id } });
   } catch (e) {
@@ -92,10 +93,16 @@ async function startExtend() {
 <template>
   <h1 class="page-title">Extend index</h1>
   <p class="page-lead">
-    Add more vectors to an existing job. Files already indexed (same
-    <code>embed_id</code>) are skipped — no duplicate API calls for those clips or
-    images.
+    Scan for <strong>new files on disk</strong> and add vectors. For the same
+    catalog, prefer <strong>Continue embedding</strong> on the job page — it skips
+    scan/preprocess and starts embedding in seconds.
   </p>
+
+  <div class="warn-box">
+    <strong>62k files scanned ≠ 62k new.</strong> The scan walks your folder (up to
+    max files). “Added N new assets” is how many paths were not in the catalog yet.
+    Already-catalogued files are not re-preprocessed.
+  </div>
 
   <p v-if="err" class="alert-error">{{ err }}</p>
 
@@ -129,13 +136,13 @@ async function startExtend() {
       <span class="field-hint">Stay under your daily Gemini quota (~1000 free/day).</span>
     </div>
     <div class="field">
-      <label for="maxVideos">Max videos (optional)</label>
+      <label for="maxVideos">Max videos (0 = photos only)</label>
       <input
         id="maxVideos"
         v-model.number="maxVideos"
         type="number"
-        min="1"
-        placeholder="no limit"
+        min="0"
+        placeholder="0"
       />
     </div>
     <div class="field">
@@ -175,5 +182,15 @@ async function startExtend() {
   margin-top: 0.35rem;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.warn-box {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.9rem;
 }
 </style>

@@ -302,6 +302,8 @@ def run_preprocess(
     max_videos: int | None = None,
     skip_thumbnails: bool = False,
     skip_videos: bool = False,
+    only_asset_ids: set[str] | frozenset[str] | None = None,
+    manifest_mode: str = "rewrite",
     progress_callback=None,
     use_global_output_dirs: bool = True,
     thumbnails_dir: Path | None = None,
@@ -329,6 +331,10 @@ def run_preprocess(
         clips_base.mkdir(parents=True, exist_ok=True)
 
     rows = read_manifest_jsonl(manifest_path)
+    if only_asset_ids is not None:
+        allow = set(only_asset_ids)
+        rows = [row for row in rows if row.get("id") in allow]
+
     videos_done = 0
     ffmpeg_ok = ffmpeg_available()
     embed_lines = 0
@@ -336,9 +342,12 @@ def run_preprocess(
     total_rows = len(rows)
     log_every = max(1, total_rows // 20) if total_rows else 1
 
+    emb_mode = "a" if manifest_mode == "append" else "w"
+    art_mode = "a" if manifest_mode == "append" else "w"
+
     with (
-        embed_manifest_path.open("w", encoding="utf-8") as emb_f,
-        artifact_path.open("w", encoding="utf-8") as art_f,
+        embed_manifest_path.open(emb_mode, encoding="utf-8") as emb_f,
+        artifact_path.open(art_mode, encoding="utf-8") as art_f,
     ):
         for row in rows:
             processed += 1
@@ -533,3 +542,42 @@ def run_preprocess(
         "embed_manifest_path": str(embed_manifest_path),
         "artifact_path": str(artifact_path),
     }
+
+
+def build_embed_manifest_fast(
+    manifest_path: Path,
+    embed_manifest_path: Path,
+    *,
+    skip_videos: bool = True,
+) -> int:
+    """Write embed_manifest lines for images only — no thumbnails or ffmpeg."""
+    rows = read_manifest_jsonl(manifest_path)
+    embed_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = 0
+    with embed_manifest_path.open("w", encoding="utf-8") as emb_f:
+        for row in rows:
+            if row.get("kind") != "image":
+                if skip_videos:
+                    continue
+            src = Path(row["path"])
+            if not src.is_file():
+                continue
+            fid = row["id"]
+            if row["kind"] == "image":
+                mime = guess_mime(src)
+                eid = embed_row_id(f"img|{src.resolve()}|{mime}")
+                _write_embed_line(
+                    emb_f,
+                    {
+                        "embed_id": eid,
+                        "asset_id": fid,
+                        "modality": "image",
+                        "path": str(src.resolve()),
+                        "mime_type": mime,
+                        "source_path": str(src.resolve()),
+                        "t_start_sec": None,
+                        "t_end_sec": None,
+                    },
+                )
+                lines += 1
+    return lines

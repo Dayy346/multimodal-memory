@@ -133,6 +133,8 @@ def extend_job(
     for k, v in raw.items():
         if v is not None:
             prior[k] = v
+    if prior.get("skip_thumbnails") is None:
+        prior["skip_thumbnails"] = True
     job.options = prior
     job.status = "pending"
     job.step = "extend_queued"

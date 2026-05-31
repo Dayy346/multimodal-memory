@@ -16,7 +16,11 @@ from app.db.session import SessionLocal
 from config.settings import JOBS_DIR
 from multimodal_memory.embed import embed_bytes, get_client
 from multimodal_memory.images import load_embed_payload
-from multimodal_memory.preprocess import read_embed_manifest_jsonl, run_preprocess
+from multimodal_memory.preprocess import (
+    build_embed_manifest_fast,
+    read_embed_manifest_jsonl,
+    run_preprocess,
+)
 from multimodal_memory.scan import iter_media_files, write_manifest_jsonl
 
 from app.services.job_runner import _append_log, _expected_dim, _utcnow
@@ -88,10 +92,12 @@ def run_extend_job(job_id: uuid.UUID) -> None:
                 select(Asset.external_key).where(Asset.job_id == job_id)
             ).all()
         )
+        new_asset_ids: set[str] = set()
         new_assets = 0
         for row in rows:
             if row["id"] in existing_asset_keys:
                 continue
+            new_asset_ids.add(row["id"])
             db.add(
                 Asset(
                     job_id=job.id,
@@ -106,41 +112,111 @@ def run_extend_job(job_id: uuid.UUID) -> None:
         db.commit()
         _append_log(db, job, f"Added {new_assets} new assets to catalog")
 
-        job.status = "preprocessing"
-        job.step = "preprocess"
-        job.message = "Extend: thumbnails and clips"
-        job.updated_at = _utcnow()
-        db.add(job)
-        db.commit()
+        manifest_lines = 0
+        if embed_manifest_path.is_file():
+            manifest_lines = len(read_embed_manifest_jsonl(embed_manifest_path))
+        if manifest_lines < had_vectors // 2 and had_vectors > 50:
+            _append_log(
+                db,
+                job,
+                f"Embed manifest looks incomplete ({manifest_lines} lines, "
+                f"{had_vectors} vectors in DB) — rebuilding fast image manifest",
+            )
+            built = build_embed_manifest_fast(
+                manifest_path,
+                embed_manifest_path,
+                skip_videos=max_videos_i is None or max_videos_i <= 0,
+            )
+            _append_log(db, job, f"Fast manifest rebuilt with {built} image targets")
+            manifest_lines = built
 
         skip_videos = max_videos_i is not None and max_videos_i <= 0
+        skip_thumbnails = bool(opts.get("skip_thumbnails", True))
 
-        def _preprocess_progress(done: int, total: int) -> None:
-            job.message = f"Extend: preparing media {done}/{total}"
+        if new_assets == 0 and embed_manifest_path.is_file() and manifest_lines > 0:
+            _append_log(
+                db,
+                job,
+                "Skipped preprocess — no new files; using existing embed manifest",
+            )
+        elif new_assets > 0 and embed_manifest_path.is_file() and manifest_lines > 0:
+            job.status = "preprocessing"
+            job.step = "preprocess"
+            job.message = f"Extend: preparing {new_assets} new files"
             job.updated_at = _utcnow()
             db.add(job)
             db.commit()
-            if done == 1 or done == total or done % max(1, total // 10) == 0:
-                _append_log(db, job, f"Preprocessed {done}/{total} assets")
 
-        run_preprocess(
-            manifest_path,
-            embed_manifest_path=embed_manifest_path,
-            artifact_path=artifact_path,
-            thumb_max=int(opts.get("thumb_max") or 512),
-            chunk_seconds=chunk_f,
-            video_poster=bool(opts.get("video_poster", True)),
-            fallback_frames=fallback_frames,
-            force=False,
-            max_videos=max_videos_i,
-            skip_thumbnails=bool(opts.get("skip_thumbnails", False)),
-            skip_videos=skip_videos,
-            progress_callback=_preprocess_progress,
-            use_global_output_dirs=False,
-            thumbnails_dir=thumbs_dir,
-            frames_dir=frames_dir,
-            clips_dir=clips_dir,
-        )
+            def _preprocess_progress(done: int, total: int) -> None:
+                job.message = f"Extend: preparing new files {done}/{total}"
+                job.updated_at = _utcnow()
+                db.add(job)
+                db.commit()
+                if done == 1 or done == total or done % max(1, total // 5) == 0:
+                    _append_log(db, job, f"Preprocessed {done}/{total} new assets")
+
+            run_preprocess(
+                manifest_path,
+                embed_manifest_path=embed_manifest_path,
+                artifact_path=artifact_path,
+                thumb_max=int(opts.get("thumb_max") or 512),
+                chunk_seconds=chunk_f,
+                video_poster=bool(opts.get("video_poster", True)),
+                fallback_frames=fallback_frames,
+                force=False,
+                max_videos=max_videos_i,
+                skip_thumbnails=skip_thumbnails,
+                skip_videos=skip_videos,
+                only_asset_ids=new_asset_ids,
+                manifest_mode="append",
+                progress_callback=_preprocess_progress,
+                use_global_output_dirs=False,
+                thumbnails_dir=thumbs_dir,
+                frames_dir=frames_dir,
+                clips_dir=clips_dir,
+            )
+        elif not embed_manifest_path.is_file() or manifest_lines == 0:
+            job.status = "preprocessing"
+            job.step = "preprocess"
+            job.message = "Extend: building embed manifest"
+            job.updated_at = _utcnow()
+            db.add(job)
+            db.commit()
+
+            if skip_thumbnails and skip_videos:
+                built = build_embed_manifest_fast(
+                    manifest_path,
+                    embed_manifest_path,
+                    skip_videos=True,
+                )
+                _append_log(db, job, f"Fast manifest built with {built} image targets")
+            else:
+                def _preprocess_progress(done: int, total: int) -> None:
+                    job.message = f"Extend: preparing media {done}/{total}"
+                    job.updated_at = _utcnow()
+                    db.add(job)
+                    db.commit()
+                    if done == 1 or done == total or done % max(1, total // 10) == 0:
+                        _append_log(db, job, f"Preprocessed {done}/{total} assets")
+
+                run_preprocess(
+                    manifest_path,
+                    embed_manifest_path=embed_manifest_path,
+                    artifact_path=artifact_path,
+                    thumb_max=int(opts.get("thumb_max") or 512),
+                    chunk_seconds=chunk_f,
+                    video_poster=bool(opts.get("video_poster", True)),
+                    fallback_frames=fallback_frames,
+                    force=False,
+                    max_videos=max_videos_i,
+                    skip_thumbnails=skip_thumbnails,
+                    skip_videos=skip_videos,
+                    progress_callback=_preprocess_progress,
+                    use_global_output_dirs=False,
+                    thumbnails_dir=thumbs_dir,
+                    frames_dir=frames_dir,
+                    clips_dir=clips_dir,
+                )
 
         if artifact_path.is_file():
             for line in artifact_path.read_text(encoding="utf-8").splitlines():
