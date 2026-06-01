@@ -16,6 +16,7 @@ MANIFESTS_DIR = DATA_DIR / "manifests"
 SAMPLES_DIR = DATA_DIR / "samples"
 
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+JOBS_DIR = OUTPUTS_DIR / "jobs"
 THUMBNAILS_DIR = OUTPUTS_DIR / "thumbnails"
 FRAMES_DIR = OUTPUTS_DIR / "frames"
 CLIPS_DIR = OUTPUTS_DIR / "clips"
@@ -29,6 +30,17 @@ VIDEO_EMBED_MAX_SECONDS = float(os.environ.get("VIDEO_EMBED_MAX_SECONDS", "118")
 VIDEO_STRIP_AUDIO_ON_CLIPS = os.environ.get(
     "VIDEO_STRIP_AUDIO_ON_CLIPS", "true"
 ).lower() in ("1", "true", "yes")
+
+# ffmpeg on NAS / iPhone MOV can be slow; timeouts skip a segment instead of failing the job
+FFMPEG_SEGMENT_TIMEOUT_SEC = int(os.environ.get("FFMPEG_SEGMENT_TIMEOUT_SEC", "1800"))
+FFMPEG_FRAME_TIMEOUT_SEC = int(os.environ.get("FFMPEG_FRAME_TIMEOUT_SEC", "300"))
+FFPROBE_TIMEOUT_SEC = int(os.environ.get("FFPROBE_TIMEOUT_SEC", "120"))
+FFMPEG_CLIP_TRY_COPY = os.environ.get("FFMPEG_CLIP_TRY_COPY", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 EMBED_MANIFEST_NAME = "embed_manifest.jsonl"
 
 IMAGE_EXTENSIONS = frozenset(
@@ -60,6 +72,7 @@ EMBEDDING_OUTPUT_DIMENSIONALITY: int | None = (
 def ensure_output_dirs() -> None:
     for d in (
         MANIFESTS_DIR,
+        JOBS_DIR,
         THUMBNAILS_DIR,
         FRAMES_DIR,
         CLIPS_DIR,

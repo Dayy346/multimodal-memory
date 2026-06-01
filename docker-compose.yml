@@ -1,0 +1,63 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: mm
+      POSTGRES_PASSWORD: mm
+      POSTGRES_DB: multimodal_memory
+    ports:
+      - "5432:5432"
+    volumes:
+      - mm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mm -d multimodal_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://mm:mm@db:5432/multimodal_memory
+    volumes:
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+      # Host NAS path → same path inside the container (see NAS_MOUNT in .env)
+      - ${NAS_MOUNT:-/mnt/photos}:/mnt/photos:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mm_pgdata:

@@ -28,9 +28,23 @@ Audio: shorter limits apply if you send audio. This project **strips audio only 
 | `scripts/preprocess_media.py` | Reads that manifest; writes thumbnails/posters; builds **`outputs/metadata/embed_manifest.jsonl`** (one line = one API embed target). |
 | `scripts/test_embeddings.py` | Reads `embed_manifest.jsonl`, calls Gemini, prints ranked hits; saves `outputs/logs/embedding_probe.json`. |
 | `requirements.txt` | Python dependencies. |
-| `.env` / `.env.example` | API keys and optional tuning (not committed). |
+| `.env` / `.env.example` | API keys, DB URL, `ALLOWED_SCAN_ROOTS`, CORS (not committed). |
+| `docker-compose.yml` / `Makefile` | `make up` — Postgres, API, and web UI in Docker (one command). |
+| `frontend/` | Vue + TypeScript UI for picking allowed roots, watching jobs, and searching. |
 
-Generated (gitignored): `outputs/thumbnails/`, `outputs/clips/`, `outputs/frames/` (fallback only), `outputs/metadata/`, `outputs/logs/`.
+Generated (gitignored): `outputs/thumbnails/`, `outputs/clips/`, `outputs/frames/` (fallback only), `outputs/metadata/`, `outputs/logs/`, `outputs/jobs/<job_id>/` (per-indexing workspace).
+
+## Full-stack mode (MVP)
+
+The FastAPI app exposes:
+
+- `GET /api/roots` — allowed scan directories from `ALLOWED_SCAN_ROOTS`
+- `POST /api/jobs` — start a background indexing job (scan → preprocess → embed → pgvector)
+- `GET /api/jobs` / `GET /api/jobs/{id}` — list and poll job status
+- `POST /api/query` — text search against embeddings for a completed job
+- `GET /api/jobs/{id}/media/thumbnail/{asset_id}` and `.../clip/{embed_target_id}` — previews
+
+Run `make up` and open the web UI on port `WEB_PORT` (default 5173). See root `README.md`.
 
 ## Run order (on your home server, option B)
 
@@ -54,11 +68,24 @@ python scripts/test_embeddings.py
 - **`--limit` / `--max-videos`**: keep costs low while learning.
 - If ffmpeg is missing, either install it or use `--fallback-frames 5` (JPEG frames; weaker than real video clips).
 
+### ffmpeg timeouts (large libraries / NAS)
+
+Preprocess **skips** a video segment when ffmpeg times out instead of failing the whole job. Optional `.env` knobs:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `FFMPEG_SEGMENT_TIMEOUT_SEC` | `1800` | Max seconds per clip segment (copy or re-encode) |
+| `FFMPEG_FRAME_TIMEOUT_SEC` | `300` | Poster / fallback frame extraction |
+| `FFPROBE_TIMEOUT_SEC` | `120` | Duration probe |
+| `FFMPEG_CLIP_TRY_COPY` | `true` | Try fast `-c:v copy` before libx264 re-encode |
+
+iPhone `.mov` on network storage often needs copy mode; re-encoding 118s can exceed 10 minutes.
+
 ## Legacy mode
 
 `python scripts/test_embeddings.py --legacy-glob` uses old JPEG-only globs instead of `embed_manifest.jsonl`.
 
 ## What “originals preserved” means
 
-- Images: embedding reads from the **source path** in the manifest.
+- Images: embedding reads from the **source path** (HEIC/HEIF transcoded to JPEG for the API; thumbnails saved as JPEG for the browser).
 - Videos: long files are **not overwritten**; new files appear only under **`outputs/clips/`** (plus optional posters under `outputs/thumbnails/`).
