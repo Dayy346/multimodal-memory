@@ -21,7 +21,7 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_EMB_DIM = int(os.environ.get("EMBEDDING_VECTOR_DIM", "3072"))
+_EMB_DIM = int(os.environ.get("EMBEDDING_VECTOR_DIM", "1024"))
 
 
 def upgrade() -> None:

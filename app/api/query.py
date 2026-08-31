@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.api.deps import DbDep, SettingsDep
 from app.api.schemas import QueryHit, QueryRequest
 from app.db.models import Asset, EmbedTarget, Embedding, Job
-from multimodal_memory.embed import embed_text, get_client
+from multimodal_memory.embed import embed_text
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -34,13 +34,10 @@ def semantic_query(body: QueryRequest, db: DbDep, settings: SettingsDep) -> list
     if job.status != "completed":
         raise HTTPException(status_code=400, detail="Job is not completed yet")
 
-    client = get_client()
     qvec = embed_text(
-        client,
-        settings.gemini_embedding_model,
         body.text,
-        task_type="RETRIEVAL_QUERY",
-        output_dimensionality=settings.gemini_embedding_dimensionality,
+        task_type="query",
+        truncate_dim=settings.embedding_truncate_dim,
     )
 
     dist_expr = Embedding.vector.cosine_distance(qvec)

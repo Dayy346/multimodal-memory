@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import JobProgress from "../components/JobProgress.vue";
-import { fetchJob, fetchJobSummary, resumeJob, type Job, type JobSummary } from "../api";
+import { fetchJob, fetchJobSummary, resumeJob, cancelJob, type Job, type JobSummary } from "../api";
 
 const props = defineProps<{ id: string }>();
 const route = useRoute();
@@ -11,6 +11,7 @@ const job = ref<Job | null>(null);
 const summary = ref<JobSummary | null>(null);
 const err = ref("");
 const resumeBusy = ref(false);
+const stopBusy = ref(false);
 const maxResumeEmbed = ref(200);
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -81,6 +82,23 @@ async function continueEmbedding() {
   }
 }
 
+async function stopJob(markAs: "failed" | "completed") {
+  err.value = "";
+  stopBusy.value = true;
+  try {
+    job.value = await cancelJob(jobId(), markAs);
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+    await loadSummary();
+  } catch (e) {
+    err.value = String(e);
+  } finally {
+    stopBusy.value = false;
+  }
+}
+
 onMounted(async () => {
   await load();
   timer = setInterval(load, 2000);
@@ -133,6 +151,30 @@ function shortId(id: string) {
     <div v-if="summary" class="summary-box">
       <p><strong>Vectors:</strong> {{ summary.vector_count }}</p>
       <p><strong>Embed targets:</strong> {{ summary.embed_target_count }}</p>
+    </div>
+
+    <div v-if="isActive" class="stop-box">
+      <p class="stop-lead">
+        Status may still show “preprocessing” after a container restart — the worker
+        is already dead; this only clears the stale flag in the database.
+      </p>
+      <button
+        type="button"
+        class="btn btn-secondary"
+        :disabled="stopBusy"
+        @click="stopJob('failed')"
+      >
+        {{ stopBusy ? "Stopping…" : "Stop job (mark failed)" }}
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary"
+        style="margin-left: 0.5rem"
+        :disabled="stopBusy"
+        @click="stopJob('completed')"
+      >
+        Mark completed
+      </button>
     </div>
 
     <div v-if="canResume" class="resume-box">
@@ -237,6 +279,20 @@ function shortId(id: string) {
 
 .inline-field input {
   width: 8rem;
+}
+
+.stop-box {
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+
+.stop-lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  color: #991b1b;
 }
 
 .section-title {

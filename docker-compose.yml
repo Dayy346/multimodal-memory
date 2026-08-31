@@ -24,11 +24,15 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://mm:mm@db:5432/multimodal_memory
+      EMBEDDING_VECTOR_DIM: "1024"
+      HF_HOME: /root/.cache/huggingface
+    shm_size: "2gb"
     volumes:
       - ./outputs:/app/outputs
       - ./data:/app/data
       # Host NAS path → same path inside the container (see NAS_MOUNT in .env)
       - ${NAS_MOUNT:-/mnt/photos}:/mnt/photos:ro
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -61,3 +65,4 @@ services:
 
 volumes:
   mm_pgdata:
+  hf_cache:

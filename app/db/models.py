@@ -14,7 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-_EMB_DIM = int(os.environ.get("EMBEDDING_VECTOR_DIM", "3072"))
+_EMB_DIM = int(os.environ.get("EMBEDDING_VECTOR_DIM", "1024"))
 
 
 def _utcnow() -> datetime:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
-import os
 import sys
 from pathlib import Path
 
@@ -18,13 +17,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from config.settings import (  # noqa: E402
     EMBEDDING_OUTPUT_DIMENSIONALITY,
     EMBED_MANIFEST_NAME,
-    GEMINI_EMBEDDING_MODEL,
+    EMBEDDING_MODEL,
     LOGS_DIR,
     METADATA_DIR,
     ensure_output_dirs,
 )
-from multimodal_memory.embed import embed_bytes, embed_text, get_client  # noqa: E402
-from multimodal_memory.images import load_embed_payload  # noqa: E402
+from multimodal_memory.embed import embed_document_file, embed_text  # noqa: E402
 from multimodal_memory.preprocess import read_embed_manifest_jsonl  # noqa: E402
 
 
@@ -76,8 +74,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default=GEMINI_EMBEDDING_MODEL,
-        help="Embedding model id (default from GEMINI_EMBEDDING_MODEL).",
+        default=EMBEDDING_MODEL,
+        help="Embedding model id (default from EMBEDDING_MODEL).",
     )
     parser.add_argument(
         "--glob",
@@ -102,17 +100,7 @@ def main() -> None:
         "--dims",
         type=int,
         default=EMBEDDING_OUTPUT_DIMENSIONALITY,
-        help="output_dimensionality (optional; from env if unset).",
-    )
-    parser.add_argument(
-        "--query-task",
-        default="RETRIEVAL_QUERY",
-        help="task_type for queries (Gemini embed config).",
-    )
-    parser.add_argument(
-        "--media-task",
-        default="RETRIEVAL_DOCUMENT",
-        help="task_type for catalog items.",
+        help="truncate_dim (optional; from env if unset).",
     )
     parser.add_argument(
         "--save-log",
@@ -123,7 +111,10 @@ def main() -> None:
     args = parser.parse_args()
 
     dims = args.dims if args.dims else None
-    client = get_client()
+    if args.model:
+        import os
+
+        os.environ["EMBEDDING_MODEL"] = args.model
 
     catalog: list[dict] = []
 
@@ -165,23 +156,10 @@ def main() -> None:
         if not p.is_file():
             print(f"skip missing file: {p}")
             continue
-        if row.get("modality") == "image":
-            data, mime = load_embed_payload(p)
-        else:
-            mime = row.get("mime_type") or mimetypes.guess_type(str(p))[0]
-            if not mime:
-                mime = "application/octet-stream"
-            data = p.read_bytes()
-        size_mb = len(data) / (1024 * 1024)
-        if size_mb > 80:
-            print(f"warning: large payload {size_mb:.1f} MB — {p.name}")
-        vec = embed_bytes(
-            client,
-            args.model,
-            data,
-            mime,
-            task_type=args.media_task,
-            output_dimensionality=dims,
+        vec = embed_document_file(
+            p,
+            str(row.get("modality") or "image"),
+            truncate_dim=dims,
         )
         items.append((row, vec))
 
@@ -202,13 +180,7 @@ def main() -> None:
 
     results: dict = {"model": args.model, "queries": []}
     for q in queries:
-        qv = embed_text(
-            client,
-            args.model,
-            q,
-            task_type=args.query_task,
-            output_dimensionality=dims,
-        )
+        qv = embed_text(q, task_type="query", truncate_dim=dims)
         scored = [(row, _cosine(qv, vec)) for row, vec in items]
         scored.sort(key=lambda x: x[1], reverse=True)
         top = scored[: args.top_k]

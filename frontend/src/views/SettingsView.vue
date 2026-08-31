@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import {
-  fetchGeminiKeyStatus,
-  updateGeminiKey,
-  type GeminiKeyStatus,
+  fetchEmbeddingStatus,
+  loadEmbeddingModel,
+  type EmbeddingStatus,
 } from "../api";
 
-const status = ref<GeminiKeyStatus | null>(null);
-const apiKey = ref("");
+const status = ref<EmbeddingStatus | null>(null);
 const err = ref("");
 const ok = ref("");
 const busy = ref(false);
 
 async function load() {
   try {
-    status.value = await fetchGeminiKeyStatus();
+    status.value = await fetchEmbeddingStatus();
     err.value = "";
   } catch (e) {
     err.value = String(e);
@@ -23,16 +22,18 @@ async function load() {
 
 onMounted(load);
 
-async function saveKey() {
+async function warmup() {
   err.value = "";
   ok.value = "";
   busy.value = true;
   try {
-    status.value = await updateGeminiKey(apiKey.value);
-    apiKey.value = "";
-    ok.value = "API key saved for this server session and written to .env.";
+    status.value = await loadEmbeddingModel();
+    ok.value = status.value.loaded
+      ? `Model ready on ${status.value.device}.`
+      : "Load finished but the model is not marked ready.";
   } catch (e) {
     err.value = String(e);
+    await load();
   } finally {
     busy.value = false;
   }
@@ -42,45 +43,89 @@ async function saveKey() {
 <template>
   <h1 class="page-title">Settings</h1>
   <p class="page-lead">
-    Update your Gemini API key when you hit daily quota limits. Embeddings use
-    the key active on the API server — not your browser.
+    Embeddings run locally with
+    <code>jinaai/jina-embeddings-v5-omni-small</code>
+    — no cloud API key. The first load downloads the weights (~4&nbsp;GB) into
+    the Hugging Face cache.
   </p>
 
   <p v-if="err" class="alert-error">{{ err }}</p>
   <p v-if="ok" class="alert-success">{{ ok }}</p>
 
   <div class="card form-grid" style="max-width: 36rem">
-    <p v-if="status?.configured" class="key-status">
-      Current key: <code>{{ status.masked_key }}</code>
-    </p>
-    <p v-else class="key-status warn">No Gemini API key configured on the server.</p>
-
-    <div class="field">
-      <label for="geminiKey">New Gemini API key</label>
-      <input
-        id="geminiKey"
-        v-model="apiKey"
-        type="password"
-        autocomplete="off"
-        placeholder="AIza…"
-      />
-      <span class="field-hint">
-        Stored as <code>GEMINI_API_KEY</code> in the server <code>.env</code> file.
-      </span>
-    </div>
+    <dl v-if="status" class="status-grid">
+      <div>
+        <dt>Model</dt>
+        <dd><code>{{ status.model }}</code></dd>
+      </div>
+      <div>
+        <dt>Device</dt>
+        <dd>{{ status.device }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd :class="status.loaded ? 'ok' : 'warn'">
+          {{ status.loaded ? "Loaded" : "Not loaded yet" }}
+        </dd>
+      </div>
+      <div>
+        <dt>Vector dim</dt>
+        <dd>{{ status.vector_dim }}</dd>
+      </div>
+      <div>
+        <dt>Modality</dt>
+        <dd>{{ status.modality }}</dd>
+      </div>
+    </dl>
+    <p v-if="status?.error" class="key-status warn">{{ status.error }}</p>
 
     <button
       type="button"
       class="btn btn-primary"
-      :disabled="busy || apiKey.trim().length < 8"
-      @click="saveKey"
+      :disabled="busy"
+      @click="warmup"
     >
-      {{ busy ? "Saving…" : "Save API key" }}
+      {{ busy ? "Loading model…" : status?.loaded ? "Reload model" : "Load model" }}
     </button>
+    <span class="field-hint">
+      First load can take several minutes. Later jobs reuse the in-memory model.
+    </span>
   </div>
 </template>
 
 <style scoped>
+.status-grid {
+  display: grid;
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.status-grid div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.status-grid dt {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status-grid dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.status-grid dd.ok {
+  color: #047857;
+}
+
+.status-grid dd.warn {
+  color: #b45309;
+}
+
 .key-status {
   margin: 0;
   font-size: 0.9rem;

@@ -47,7 +47,7 @@ def write_thumbnail_jpeg(src: Path, dest: Path, max_side: int) -> bool:
 
 
 def load_embed_payload(path: Path) -> tuple[bytes, str]:
-    # Gemini embedding is reliable with JPEG/PNG; transcode HEIC/HEIF first.
+    # Local encoder takes PIL RGB; transcode HEIC/HEIF first.
     if is_heif_path(path):
         register_heif_opener()
         with open_image(path) as im:

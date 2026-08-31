@@ -24,8 +24,7 @@ EMBEDDINGS_DIR = OUTPUTS_DIR / "embeddings"
 METADATA_DIR = OUTPUTS_DIR / "metadata"
 LOGS_DIR = OUTPUTS_DIR / "logs"
 
-# Gemini Embedding 2 video: stay under ~120s per request; audio lowers the cap,
-# so derived clips strip audio by default (original files on disk unchanged).
+# Video clips stay short so search hits keep a useful time range (not an API limit).
 VIDEO_EMBED_MAX_SECONDS = float(os.environ.get("VIDEO_EMBED_MAX_SECONDS", "118"))
 VIDEO_STRIP_AUDIO_ON_CLIPS = os.environ.get(
     "VIDEO_STRIP_AUDIO_ON_CLIPS", "true"
@@ -59,11 +58,11 @@ VIDEO_EXTENSIONS = frozenset(
     }
 )
 
-GEMINI_EMBEDDING_MODEL = os.environ.get(
-    "GEMINI_EMBEDDING_MODEL", "gemini-embedding-2-preview"
+EMBEDDING_MODEL = os.environ.get(
+    "EMBEDDING_MODEL", "jinaai/jina-embeddings-v5-omni-small"
 )
 
-_dims = os.environ.get("GEMINI_EMBEDDING_DIMENSIONALITY", "").strip()
+_dims = os.environ.get("EMBEDDING_TRUNCATE_DIM", "").strip()
 EMBEDDING_OUTPUT_DIMENSIONALITY: int | None = (
     int(_dims) if _dims.isdigit() else None
 )

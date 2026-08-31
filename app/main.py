@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,10 +14,26 @@ from app.api import settings as settings_api
 from app.core.config import get_settings
 from config.settings import ensure_output_dirs
 
+logger = logging.getLogger(__name__)
+
+
+def _warmup_embeddings() -> None:
+    try:
+        from multimodal_memory.embed import ensure_model_loaded
+
+        ensure_model_loaded()
+    except Exception:
+        logger.exception("Embedding model warmup failed")
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     ensure_output_dirs()
+    threading.Thread(
+        target=_warmup_embeddings,
+        daemon=True,
+        name="embed-warmup",
+    ).start()
     yield
 
 

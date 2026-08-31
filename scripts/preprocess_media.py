@@ -1,4 +1,4 @@
-"""Prepare embed targets: original images, video clips (<= API max length), thumbnails."""
+"""Prepare embed targets: original images, video clips, thumbnails."""
 
 from __future__ import annotations
 

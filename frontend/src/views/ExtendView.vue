@@ -145,7 +145,7 @@ async function startExtend() {
     <div class="field">
       <label for="maxNew">Max <em>new</em> embeds this run</label>
       <input id="maxNew" v-model.number="maxNewEmbed" type="number" min="1" />
-      <span class="field-hint">Stay under your daily Gemini quota (~1000 free/day).</span>
+      <span class="field-hint">Local model — no API quota. Start small while you confirm quality.</span>
     </div>
     <div class="field">
       <label for="maxVideos">Max videos (0 = photos only)</label>

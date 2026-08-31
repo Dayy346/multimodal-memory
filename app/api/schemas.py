@@ -71,13 +71,18 @@ class JobResume(BaseModel):
     skip_preprocess: bool = True
 
 
-class GeminiKeyStatus(BaseModel):
-    configured: bool
-    masked_key: str | None = None
+class JobCancel(BaseModel):
+    mark_as: str = Field(default="failed", pattern="^(failed|completed)$")
 
 
-class GeminiKeyUpdate(BaseModel):
-    api_key: str = Field(min_length=8, max_length=512)
+class EmbeddingStatus(BaseModel):
+    model: str
+    loaded: bool
+    device: str
+    vector_dim: int
+    modality: str
+    truncate_dim: int | None = None
+    error: str | None = None
 
 
 class JobSummary(BaseModel):

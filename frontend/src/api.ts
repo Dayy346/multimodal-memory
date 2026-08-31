@@ -94,23 +94,36 @@ export async function resumeJob(
   return parseJson<Job>(r);
 }
 
-export type GeminiKeyStatus = {
-  configured: boolean;
-  masked_key: string | null;
-};
-
-export async function fetchGeminiKeyStatus(): Promise<GeminiKeyStatus> {
-  const r = await fetch("/api/settings/gemini");
-  return parseJson<GeminiKeyStatus>(r);
-}
-
-export async function updateGeminiKey(apiKey: string): Promise<GeminiKeyStatus> {
-  const r = await fetch("/api/settings/gemini", {
+export async function cancelJob(
+  jobId: string,
+  markAs: "failed" | "completed" = "failed",
+): Promise<Job> {
+  const r = await fetch(`/api/jobs/${jobId}/cancel`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: apiKey }),
+    body: JSON.stringify({ mark_as: markAs }),
   });
-  return parseJson<GeminiKeyStatus>(r);
+  return parseJson<Job>(r);
+}
+
+export type EmbeddingStatus = {
+  model: string;
+  loaded: boolean;
+  device: string;
+  vector_dim: number;
+  modality: string;
+  truncate_dim: number | null;
+  error: string | null;
+};
+
+export async function fetchEmbeddingStatus(): Promise<EmbeddingStatus> {
+  const r = await fetch("/api/settings/embedding");
+  return parseJson<EmbeddingStatus>(r);
+}
+
+export async function loadEmbeddingModel(): Promise<EmbeddingStatus> {
+  const r = await fetch("/api/settings/embedding/load", { method: "POST" });
+  return parseJson<EmbeddingStatus>(r);
 }
 
 export async function createJob(body: Record<string, unknown>): Promise<Job> {

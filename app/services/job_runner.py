@@ -15,8 +15,7 @@ from app.core.config import get_settings
 from app.db.models import Asset, EmbedTarget, Embedding, Job
 from app.db.session import SessionLocal
 from config.settings import JOBS_DIR
-from multimodal_memory.embed import embed_bytes, get_client
-from multimodal_memory.images import load_embed_payload
+from multimodal_memory.embed import embed_document_file, ensure_model_loaded
 from multimodal_memory.preprocess import read_embed_manifest_jsonl, run_preprocess
 from multimodal_memory.scan import iter_media_files, write_manifest_jsonl
 
@@ -37,7 +36,7 @@ def _append_log(db, job: Job, message: str) -> None:
 
 
 def _expected_dim() -> int:
-    return int(os.environ.get("EMBEDDING_VECTOR_DIM", "3072"))
+    return int(os.environ.get("EMBEDDING_VECTOR_DIM", "1024"))
 
 
 def run_index_job(job_id: uuid.UUID) -> None:
@@ -168,14 +167,15 @@ def run_index_job(job_id: uuid.UUID) -> None:
 
         job.status = "embedding"
         job.step = "embed"
-        job.message = "Calling Gemini embedding API"
+        job.message = "Loading local embedding model"
         job.updated_at = _utcnow()
         db.add(job)
         db.commit()
+        ensure_model_loaded()
+        _append_log(db, job, f"Embedding with {settings.embedding_model}")
 
-        client = get_client()
-        model = settings.gemini_embedding_model
-        dims_opt = settings.gemini_embedding_dimensionality
+        model = settings.embedding_model
+        dims_opt = settings.embedding_truncate_dim
 
         done = 0
         for er in embed_rows:
@@ -203,23 +203,15 @@ def run_index_job(job_id: uuid.UUID) -> None:
             db.add(et)
             db.flush()
 
-            if et.modality == "image":
-                data, embed_mime = load_embed_payload(p)
-            else:
-                data = p.read_bytes()
-                embed_mime = et.mime_type
-            vec = embed_bytes(
-                client,
-                model,
-                data,
-                embed_mime,
-                task_type="RETRIEVAL_DOCUMENT",
-                output_dimensionality=dims_opt,
+            vec = embed_document_file(
+                p,
+                et.modality,
+                truncate_dim=dims_opt,
             )
             if len(vec) != expected_dim:
                 raise RuntimeError(
                     f"Embedding length {len(vec)} != EMBEDDING_VECTOR_DIM {expected_dim}; "
-                    "set GEMINI_EMBEDDING_DIMENSIONALITY to match or adjust EMBEDDING_VECTOR_DIM."
+                    "set EMBEDDING_TRUNCATE_DIM to match or adjust EMBEDDING_VECTOR_DIM."
                 )
 
             db.add(

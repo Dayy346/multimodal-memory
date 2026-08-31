@@ -14,8 +14,7 @@ from app.core.config import get_settings
 from app.db.models import Asset, EmbedTarget, Embedding, Job
 from app.db.session import SessionLocal
 from config.settings import JOBS_DIR
-from multimodal_memory.embed import embed_bytes, get_client
-from multimodal_memory.images import load_embed_payload
+from multimodal_memory.embed import embed_document_file, ensure_model_loaded
 from multimodal_memory.preprocess import (
     build_embed_manifest_fast,
     read_embed_manifest_jsonl,
@@ -254,7 +253,7 @@ def run_extend_job(job_id: uuid.UUID) -> None:
 
         job.status = "embedding"
         job.step = "embed"
-        job.message = "Extend: calling Gemini embedding API"
+        job.message = "Extend: loading local embedding model"
         job.updated_at = _utcnow()
         db.add(job)
         db.commit()
@@ -270,9 +269,11 @@ def run_extend_job(job_id: uuid.UUID) -> None:
             _append_log(db, job, "Extend finished — nothing new")
             return
 
-        client = get_client()
-        model = settings.gemini_embedding_model
-        dims_opt = settings.gemini_embedding_dimensionality
+        ensure_model_loaded()
+        _append_log(db, job, f"Embedding with {settings.embedding_model}")
+
+        model = settings.embedding_model
+        dims_opt = settings.embedding_truncate_dim
 
         done = 0
         total_new = len(new_rows)
@@ -301,19 +302,10 @@ def run_extend_job(job_id: uuid.UUID) -> None:
             db.add(et)
             db.flush()
 
-            if et.modality == "image":
-                data, embed_mime = load_embed_payload(p)
-            else:
-                data = p.read_bytes()
-                embed_mime = et.mime_type
-
-            vec = embed_bytes(
-                client,
-                model,
-                data,
-                embed_mime,
-                task_type="RETRIEVAL_DOCUMENT",
-                output_dimensionality=dims_opt,
+            vec = embed_document_file(
+                p,
+                et.modality,
+                truncate_dim=dims_opt,
             )
             if len(vec) != expected_dim:
                 raise RuntimeError(
