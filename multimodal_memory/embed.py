@@ -89,6 +89,12 @@ def get_model() -> Any:
                     "modality": modality,
                 },
             )
+            processor = getattr(_model[0], "processor", None)
+            if processor is None and modality != "text":
+                raise RuntimeError(
+                    "Vision/audio processor failed to load (processor is None). "
+                    "Install torchvision (and peft); see model card extras."
+                )
             _device = device
             logger.info("Embedding model ready on %s", device)
         except Exception as e:
