@@ -4,7 +4,7 @@ Project scaffold for multimodal memory (app, scripts, config, data, outputs).
 
 Embeddings run **locally** with [`jinaai/jina-embeddings-v5-omni-small`](https://huggingface.co/jinaai/jina-embeddings-v5-omni-small) (text, image, video in one 1024-d space). No Gemini API key. The model is CC BY-NC 4.0.
 
-Give the API process **~8 GB RAM** (Docker Desktop memory slider on Windows). The first run downloads about 4 GB of weights into the Hugging Face cache.
+Give the API process **~8 GB RAM** (Docker Desktop memory slider on Windows). The first run downloads about 4 GB of weights into the Hugging Face cache. Runtime extras include `peft` and `torchvision` (needed for the vision processor).
 
 ## Layout
 
