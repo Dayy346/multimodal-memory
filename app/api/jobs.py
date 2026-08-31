@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbDep, SettingsDep
 from app.api.job_out import job_to_out
-from app.api.schemas import JobCreate, JobExtend, JobOut, JobResume, JobSummary
+from app.api.schemas import JobCancel, JobCreate, JobExtend, JobOut, JobResume, JobSummary
 from app.db.models import Asset, EmbedTarget, Embedding, Job
 from app.services.job_extend import assert_job_extendable, job_vector_count, run_extend_job
 from app.services.job_resume import assert_job_resumable, run_resume_job
@@ -177,4 +177,47 @@ def resume_job(
     db.commit()
     db.refresh(job)
     tasks.add_task(run_resume_job, job.id)
+    return job_to_out(job)
+
+
+_BUSY = frozenset({
+    "pending",
+    "scanning",
+    "preprocessing",
+    "embedding",
+    "extend_queued",
+    "resume_queued",
+})
+
+
+@router.post("/{job_id}/cancel", response_model=JobOut)
+def cancel_job(job_id: uuid.UUID, body: JobCancel, db: DbDep) -> JobOut:
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    status = (job.status or "").lower()
+    if status not in _BUSY:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is not running (status={job.status})",
+        )
+
+    mark = body.mark_as
+    if mark == "completed":
+        job.status = "completed"
+        job.step = "done"
+        job.message = "Stopped by user — marked completed (worker was not running)"
+    else:
+        job.status = "failed"
+        job.step = "stopped"
+        job.message = "Stopped by user — use Continue embedding to resume"
+    job.error = None
+    job.updated_at = _utcnow()
+    logs = list(job.logs or [])
+    logs.append("Stopped by user (container restart or manual cancel)")
+    job.logs = logs[-500:]
+    db.add(job)
+    db.commit()
+    db.refresh(job)
     return job_to_out(job)

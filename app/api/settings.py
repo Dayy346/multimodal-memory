@@ -1,31 +1,24 @@
-"""App settings (Gemini API key)."""
+"""App settings (local embedding model status)."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.schemas import GeminiKeyStatus, GeminiKeyUpdate
-from app.services.gemini_settings import current_api_key, mask_api_key, set_api_key
+from app.api.schemas import EmbeddingStatus
+from multimodal_memory.embed import ensure_model_loaded, model_status
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("/gemini", response_model=GeminiKeyStatus)
-def get_gemini_key_status() -> GeminiKeyStatus:
-    key = current_api_key()
-    if not key:
-        return GeminiKeyStatus(configured=False, masked_key=None)
-    return GeminiKeyStatus(configured=True, masked_key=mask_api_key(key))
+@router.get("/embedding", response_model=EmbeddingStatus)
+def get_embedding_status() -> EmbeddingStatus:
+    return EmbeddingStatus(**model_status())
 
 
-@router.post("/gemini", response_model=GeminiKeyStatus)
-def update_gemini_key(body: GeminiKeyUpdate) -> GeminiKeyStatus:
+@router.post("/embedding/load", response_model=EmbeddingStatus)
+def load_embedding_model() -> EmbeddingStatus:
     try:
-        set_api_key(body.api_key)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    key = current_api_key()
-    return GeminiKeyStatus(
-        configured=True,
-        masked_key=mask_api_key(key) if key else None,
-    )
+        status = ensure_model_loaded()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return EmbeddingStatus(**status)

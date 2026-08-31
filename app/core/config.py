@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -35,19 +34,23 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
 
-    embedding_vector_dim: int = Field(default=3072, alias="EMBEDDING_VECTOR_DIM")
+    embedding_vector_dim: int = Field(default=1024, alias="EMBEDDING_VECTOR_DIM")
 
-    gemini_embedding_model: str = Field(
-        default="gemini-embedding-2-preview",
-        alias="GEMINI_EMBEDDING_MODEL",
+    embedding_model: str = Field(
+        default="jinaai/jina-embeddings-v5-omni-small",
+        alias="EMBEDDING_MODEL",
     )
 
-    gemini_embedding_dimensionality: int | None = Field(
+    embedding_truncate_dim: int | None = Field(
         default=None,
-        alias="GEMINI_EMBEDDING_DIMENSIONALITY",
+        alias="EMBEDDING_TRUNCATE_DIM",
     )
 
-    @field_validator("gemini_embedding_dimensionality", mode="before")
+    embedding_device: str = Field(default="auto", alias="EMBEDDING_DEVICE")
+
+    embedding_modality: str = Field(default="vision", alias="EMBEDDING_MODALITY")
+
+    @field_validator("embedding_truncate_dim", mode="before")
     @classmethod
     def blank_dim_none(cls, v: object) -> object:
         if v == "" or v is None:

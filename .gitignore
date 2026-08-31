@@ -17,5 +17,6 @@ outputs/clips/*
 outputs/metadata/*
 outputs/jobs/*
 data/samples/*
+.cache/
 frontend/node_modules/
 frontend/dist/
